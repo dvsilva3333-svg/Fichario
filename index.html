@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fichário">
+<title>Fichário</title>
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/fichario.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <button class="iconbtn" id="backBtn" aria-label="Voltar" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <h1 class="brand" id="title">Fichário</h1>
+    <button class="iconbtn" id="editBtn" aria-label="Editar este card" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
+    </button>
+    <button class="textbtn" id="undoBtn" hidden disabled>Desfazer</button>
+    <button class="iconbtn" id="statsBtn" aria-label="Estatísticas">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/></svg>
+    </button>
+    <button class="iconbtn" id="settingsBtn" aria-label="Ajustes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="view wrap" id="home">
+    <div id="homeList"></div>
+    <p class="sectionlabel">Caderno de erros</p>
+    <ul class="decks acts"><li><button class="deckrow act" id="wrongBtnHome"><span class="ic" style="background:#FF3B30"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5"/><path d="M12 16.5v.01"/><path d="M10.3 3.9L2.6 17.3A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.7L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span><span class="nm"><b>Card de questão errada</b></span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button></li><li><button class="deckrow act" id="errorsBtnHome"><span class="ic" style="background:#FF9500"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 5.5v16"/></svg></span><span class="nm"><b>Caderno de erros</b></span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button></li></ul>
+    <p class="sectionlabel">Adicionar baralho</p>
+    <ul class="decks acts"><li><button class="deckrow act" id="importBtn2"><span class="ic" style="background:#007AFF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg></span><span class="nm"><b>Importar do Anki (.apkg)</b></span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button></li><li><button class="deckrow act" id="scratchBtn2"><span class="ic" style="background:#34C759"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><span class="nm"><b>Criar baralho do zero</b></span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button></li></ul>
+    <p class="status" id="syncStatus"></p>
+  </section>
+
+  <section class="view wrap" id="empty" hidden>
+    <div class="empty">
+      <div class="paper">
+        <div class="head">Comece por aqui</div>
+        <div class="body">
+          <h2>Traga seus cards do Anki</h2>
+          <p>Exporte o deck no computador e abra o arquivo aqui. As revisões seguem o FSRS, o mesmo algoritmo do Anki.</p>
+          <ol class="how">
+            <li>No Anki do computador: Arquivo › Exportar.</li>
+            <li>Escolha <b>Pacote de baralho do Anki (.apkg)</b> e marque incluir agendamento e mídia.</li>
+            <li>Mande o arquivo para o celular (AirDrop, iCloud Drive ou WhatsApp).</li>
+            <li>Toque em importar e escolha o arquivo.</li>
+          </ol>
+        </div>
+      </div>
+      <div class="stack"><button class="primary" id="importBtn">Importar deck (.apkg)</button><button class="secondary" id="scratchBtn">Começar do zero, sem importar</button></div>
+      <p class="status" id="syncStatus2"></p>
+    </div>
+  </section>
+
+  <section class="view wrap" id="deck" hidden>
+    <div class="stack" style="margin-top:8px">
+      <button class="primary" id="studyAllBtn">Estudar</button>
+      <div class="tiles"><button class="tile" id="newCardBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg><span>Novo card</span></button><button class="tile" id="lessonBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 12h7M9 16h5"/></svg><span>Cards de aula</span></button><button class="tile" id="wrongBtnDeck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5"/><path d="M12 16.5v.01"/><path d="M10.3 3.9L2.6 17.3A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.7L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>Questão errada</span></button><button class="tile" id="tagsBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span>Por tag</span></button><button class="tile" id="browseBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><span>Buscar</span></button></div>
+    </div>
+    <div class="legend" id="deckLegend"><i class="n">novos</i><i class="l">aprendendo</i><i class="r">revisar</i></div>
+    <ul class="decks subtree" id="subtree"></ul>
+    <ul class="decks acts" style="margin-top:12px"><li><button class="deckrow act" id="newFolderBtn"><span class="ic" style="background:#007AFF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10.5v5M9.5 13h5"/></svg></span><span class="nm"><b>Nova pasta</b></span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button></li></ul>
+    <div class="paper" id="apkgBox" style="margin-top:20px">
+      <div class="head"><span>Exportar em .apkg</span></div>
+      <div class="body">
+        <p style="margin:0 0 12px">Gera um arquivo .apkg com todos os cards, pastas e imagens deste deck. Ele abre no Anki e também no Fichário de outro aparelho.</p>
+        <label class="chk"><input type="checkbox" id="apkgProgress" checked><span>Incluir meu progresso de revisão</span></label>
+        <button class="primary" id="apkgBtn">Preparar arquivo .apkg</button>
+        <p class="note" id="apkgNote" aria-live="polite"></p>
+      </div>
+    </div>
+    <div class="paper" id="exportBox" style="margin-top:20px" hidden>
+      <div class="head"><span>Para levar ao Anki do computador</span></div>
+      <div class="body">
+        <p style="margin:0 0 12px" id="exportText"></p>
+        <button class="primary" id="exportBtn">Exportar para o Anki</button>
+      </div>
+    </div>
+    <div class="paper" id="progressBox" style="margin-top:20px" hidden>
+      <div class="head"><span>Progresso e pastas para o Anki do computador</span></div>
+      <div class="body">
+        <p style="margin:0 0 12px" id="progressText"></p>
+        <button class="secondary" id="progressBtn">Exportar progresso e pastas</button>
+      </div>
+    </div>
+    <p class="note" id="deckMeta"></p>
+    <div class="stack">
+      <button class="secondary" id="reimportBtn">Atualizar com um .apkg mais novo</button>
+      <button class="danger" id="deleteBtn">Remover este deck do aparelho</button>
+    </div>
+  </section>
+
+  <section class="view wrap" id="tags" hidden>
+    <div class="searchbox"><input class="inp" id="tagSearch" type="search" placeholder="Filtrar tags" autocomplete="off" aria-label="Filtrar tags"></div>
+    <div class="legend" style="margin-top:4px"><i class="l">vencendo hoje</i><i>total</i></div>
+    <ul class="decks" id="tagList"></ul>
+  </section>
+
+  <section class="view wrap" id="browse" hidden>
+    <div class="searchbox">
+      <input class="inp" id="q" type="search" placeholder="Buscar no texto ou nas tags" autocomplete="off" aria-label="Buscar cards">
+      <div class="chips">
+        <button class="chip" id="chipPending" aria-pressed="false">Pendentes para o Anki</button>
+        <button class="chip" id="chipMine" aria-pressed="false">Criados aqui</button>
+      </div>
+    </div>
+    <p class="note" id="browseMeta"></p>
+    <ul class="decks" id="results"></ul>
+  </section>
+
+  <section class="view wrap" id="edit" hidden>
+    <div id="editMount"></div>
+  </section>
+
+  <section class="view wrap" id="wrong" hidden>
+    <div class="field" id="wrongPkgField">
+      <label for="wPkg">Deck</label>
+      <select class="inp" id="wPkg"></select>
+    </div>
+    <div class="field">
+      <label for="wQ">Questão</label>
+      <textarea class="inp" id="wQ" placeholder="Cole o enunciado e as alternativas"></textarea>
+    </div>
+    <div class="field">
+      <label for="wA">Gabarito e comentário</label>
+      <textarea class="inp" id="wA" placeholder="Alternativa correta e o porquê"></textarea>
+    </div>
+    <div class="field">
+      <label for="wWhy">O que você marcou e por quê <span style="font-weight:400;color:var(--muted)">opcional</span></label>
+      <textarea class="inp short" id="wWhy" placeholder="Ex.: marquei C porque confundi com…"></textarea>
+    </div>
+    <div class="field">
+      <label for="wSrc">Fonte <span style="font-weight:400;color:var(--muted)">opcional</span></label>
+      <input class="inp" id="wSrc" placeholder="Ex.: USP 2024 Q61" autocomplete="off">
+    </div>
+    <div class="field">
+      <div class="lbl">Grande área</div>
+      <div class="chips" id="wArea"></div>
+    </div>
+    <div class="field">
+      <div class="lbl">O que aconteceu</div>
+      <div class="seg s2" role="radiogroup" aria-label="O que aconteceu">
+        <label><input type="radio" name="wType" value="conteudo" checked><span>Errei por conteúdo</span></label>
+        <label><input type="radio" name="wType" value="raciocinio"><span>Errei no raciocínio</span></label>
+        <label><input type="radio" name="wType" value="leitura"><span>Errei por leitura</span></label>
+        <label><input type="radio" name="wType" value="acertei"><span>Acertei com dúvida</span></label>
+      </div>
+    </div>
+    <div class="field" id="wMethod" hidden>
+      <div class="lbl">Que tipo de erro de leitura?</div>
+      <div class="chips" id="wPat"></div>
+      <label for="wLesson" style="margin-top:16px">Lição em uma frase</label>
+      <input class="inp" id="wLesson" placeholder="Ex.: grifar EXCETO antes de ler as alternativas" autocomplete="off">
+      <p>Pela sua regra, erro de leitura não vira card: ele entra no catálogo de método.</p>
+    </div>
+    <div class="field" id="wImgField">
+      <div class="lbl">Foto da questão <span style="font-weight:400;color:var(--muted)">opcional</span></div>
+      <div class="thumb" id="wThumb" hidden><img id="wThumbImg" alt="Foto escolhida"><button class="textbtn" id="wImgClear">Remover foto</button></div>
+      <div class="stack" style="margin-top:10px" id="wImgPickWrap"><button class="secondary" id="wImgPick">Escolher foto</button></div>
+      <label class="check"><input type="checkbox" id="wImgInCard" checked> Pôr a imagem no card</label>
+    </div>
+    <div class="stack">
+      <button class="primary" id="wGo">Gerar card</button>
+      <button class="secondary" id="wManual">Escrever o card eu mesmo</button>
+      <button class="textbtn" id="wForce" style="justify-self:center" hidden>Fazer card mesmo assim</button>
+    </div>
+    <div id="wOut"></div>
+  </section>
+
+  <section class="view wrap" id="newcard" hidden>
+    <p class="note" style="margin-top:12px">O card salvo entra primeiro na fila de novos e vai junto quando você exportar o deck em .apkg.</p>
+    <div id="newMount"></div>
+  </section>
+
+  <section class="view wrap" id="lesson" hidden>
+    <div class="field" style="margin-top:12px">
+      <label for="lDeck">Baralho dos cards</label>
+      <select class="inp" id="lDeck"></select>
+    </div>
+    <div class="field">
+      <label for="lText">Aula ou resumo</label>
+      <textarea class="inp" id="lText" style="min-height:220px" placeholder="Cole aqui a transcrição da aula ou o seu resumo"></textarea>
+      <p id="lCount"></p>
+    </div>
+    <div class="field">
+      <label for="lFocus">Foco <span style="font-weight:400;color:var(--muted)">opcional</span></label>
+      <input class="inp" id="lFocus" placeholder="Ex.: só condutas e critérios diagnósticos" autocomplete="off">
+    </div>
+    <div class="field">
+      <div class="lbl">Quantos cards</div>
+      <div class="seg" role="radiogroup" aria-label="Quantos cards">
+        <label><input type="radio" name="lSize" value="8"><span>Só o essencial<br>até 8</span></label>
+        <label><input type="radio" name="lSize" value="15" checked><span>Equilibrado<br>até 15</span></label>
+        <label><input type="radio" name="lSize" value="25"><span>Completo<br>até 25</span></label>
+      </div>
+    </div>
+    <div class="stack"><button class="primary" id="lGo">Gerar cards</button></div>
+    <div id="lOut"></div>
+  </section>
+
+  <section class="view wrap" id="errors" hidden>
+    <div class="seg s2" role="radiogroup" aria-label="Seção" style="margin-top:12px">
+      <label><input type="radio" name="errTab" value="lista" checked><span>Erros</span></label>
+      <label><input type="radio" name="errTab" value="metodo"><span>Catálogo de método</span></label>
+    </div>
+    <div id="errBody"></div>
+  </section>
+
+  <section class="view wrap" id="errdetail" hidden>
+    <div id="errDetailBody"></div>
+  </section>
+
+  <section class="view wrap" id="study" hidden>
+    <div class="studyhead" id="studyHead"></div>
+    <div class="fcard" id="fcard">
+      <div class="head"><span id="cardDeck"></span><span id="cardState"></span></div>
+      <div id="cardhost" role="button" tabindex="0" aria-label="Cartão. Toque para ver a resposta."></div>
+    </div>
+    <div class="done" id="doneBox" hidden></div>
+  </section>
+
+  <section class="view wrap" id="stats" hidden>
+    <div class="seg" role="radiogroup" aria-label="Estatísticas" style="margin-top:12px">
+      <label><input type="radio" name="statTab" value="geral" checked><span>Geral</span></label>
+      <label><input type="radio" name="statTab" value="areas"><span>Por área</span></label>
+      <label><input type="radio" name="statTab" value="erros"><span>Erros</span></label>
+    </div>
+    <div class="field" id="statsScopeField" style="margin-top:8px">
+      <label for="statsScope">Mostrar</label>
+      <select class="inp" id="statsScope"></select>
+    </div>
+    <div id="statsBody"></div>
+  </section>
+
+  <section class="view wrap" id="settings" hidden>
+    <div class="field">
+      <label for="ret">Retenção desejada <output id="retOut">90%</output></label>
+      <input type="range" id="ret" min="80" max="97" step="1" value="90">
+      <p>A chance de lembrar que o FSRS mira na hora de cada revisão. Subir de 90% para 95% praticamente dobra as revisões. Perto da prova, subir um pouco encurta todos os intervalos.</p>
+    </div>
+    <div class="field">
+      <label for="newPer">Cards novos por dia</label>
+      <div class="stepper">
+        <button id="newMinus" aria-label="Menos 5">−</button>
+        <input id="newPer" type="number" inputmode="numeric" min="0" max="500" value="20">
+        <button id="newPlus" aria-label="Mais 5">+</button>
+      </div>
+      <p>Vale para cada deck. Cards criados aqui no celular entram primeiro na fila de novos.</p>
+    </div>
+    <div class="field">
+      <div class="lbl">Significado das cores</div>
+      <div id="colorMeanings"></div>
+      <p>O editor mostra essa legenda, e o Claude pinta as palavras-chave dos cards seguindo ela.</p>
+    </div>
+    <div class="field">
+      <label>Onde o progresso fica</label>
+      <p id="syncStatus3"></p>
+      <p>Os decks ficam guardados neste aparelho. Para levar tudo a outro aparelho, abra o deck, toque em Preparar arquivo .apkg com o progresso incluído e importe esse arquivo no outro aparelho. Vale também como cópia de segurança.</p>
+    </div>
+  </section>
+</main>
+
+<input type="file" id="file" hidden>
+<input type="file" id="imgFile" accept="image/*" hidden>
+<div class="overlay" id="overlay" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="ovMsg">
+    <div class="head" id="ovHead">Importando</div>
+    <div class="body">
+      <p class="msg" id="ovMsg"></p>
+      <div class="stack" id="ovActions" hidden><button class="secondary" id="ovClose">Fechar</button></div>
+    </div>
+  </div>
+</div>
+<div class="overlay sheet" id="sheet" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="head">Tag</div>
+    <div class="body">
+      <h3 id="sheetTitle"></h3>
+      <p class="note" id="sheetNote" style="margin-top:0"></p>
+      <div class="stack" style="margin-top:14px">
+        <button class="primary" id="sheetDue"></button>
+        <button class="secondary" id="sheetCram"></button>
+        <button class="textbtn" id="sheetClose" style="justify-self:center">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="overlay sheet" id="fsheet" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="fsHead">
+    <div class="head" id="fsHead">Pasta</div>
+    <div class="body" id="fsBody"></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="js/core.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
