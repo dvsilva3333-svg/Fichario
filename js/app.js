@@ -848,6 +848,7 @@ function countsFor(cards, pkg){
   const k = { n:0, l:0, r:0 };
   for (const c of cards) { const t = classify(c, now, cutoff); if (t) k[t]++; }
   k.n = Math.min(k.n, Math.max(0, A.prefs.newPerDay - newDone(pkg)));
+  if (PLAN.maxRev) k.r = Math.min(k.r, Math.max(0, PLAN.maxRev - revDone(pkg)));
   return k;
 }
 function countsHtml(k, cur){
@@ -903,7 +904,7 @@ function back(){
 function refresh(){ const top = NAV[NAV.length - 1]; if (!top) return; if (['home','deck','tags','stats','errors'].includes(top.name)) RENDER[top.name](Object.assign({}, top.params, { back:true })); }
 function show(view, title, small){
   A.view = view;
-  for (const v of ['home','empty','deck','tags','browse','edit','wrong','study','stats','settings','errors','errdetail','newcard','lesson','mcq','focus']) $(v).hidden = v !== view;
+  for (const v of ['home','empty','deck','tags','browse','edit','wrong','study','stats','settings','errors','errdetail','newcard','lesson','mcq','focus','plan']) $(v).hidden = v !== view;
   const root = view === 'home' || view === 'empty';
   $('backBtn').hidden = root;
   $('settingsBtn').hidden = !(root || view === 'deck');
@@ -981,6 +982,7 @@ function drawGame(){
     '<div class="chips"><span class="chip' + (i.streak ? ' fire' : '') + '">' + FLAME + (i.streak ? i.streak + (i.streak === 1 ? ' dia seguido' : ' dias seguidos') : 'Comece sua sequência hoje') + '</span>' +
       '<span class="chip goal' + (i.goalPct >= 100 ? ' hit' : '') + '"><span class="gbar"><i style="width:' + i.goalPct + '%"></i></span>' + (i.goalPct >= 100 ? 'Meta do dia batida · ' + i.today.toLocaleString('pt-BR') + ' XP' : 'Hoje ' + i.today.toLocaleString('pt-BR') + ' / ' + i.goal.toLocaleString('pt-BR') + ' XP') + '</span></div></div>';
   for (const el of document.querySelectorAll('.gamehero')) el.innerHTML = hero;
+  drawChallenges();
   const strip = $('xpStrip');
   if (strip) strip.innerHTML = '<span class="lv">Nv ' + i.level + '</span><span class="xpbar"><i style="width:' + i.pct + '%"></i></span><span class="tx">' + i.today + ' XP hoje</span>';
 }
@@ -995,6 +997,7 @@ function addXp(n){
   clearTimeout(gameTimer); gameTimer = setTimeout(() => Store.kvSet('game', g).catch(()=>{}), 250);
   drawGame();
   if (n > 0) {
+    checkChallenges();
     xpPop('+' + n + ' XP');
     const after = levelOf(g.xp);
     if (after > before) levelUp(after);
@@ -1212,7 +1215,9 @@ function drawFocus(){
   $('taskList').innerHTML = open.concat(done).map(row).join('') || '<li class="taskempty">Nenhuma tarefa. Escreva acima o que vai estudar agora.</li>';
   $('taskClear').hidden = !done.length;
 }
-RENDER.focus = function(){ show('focus', 'Foco', true); drawFocus(); $('focusPill').hidden = true; };
+RENDER.focus = function(){ show('focus', 'Foco', true); drawFocus(); $('focusPill').hidden = true; if (document.activeElement !== $('fcNotes')) $('fcNotes').value = F.notes || ''; };
+let notesTimer = null;
+$('fcNotes').addEventListener('input', e => { F.notes = e.target.value.slice(0, 20000); clearTimeout(notesTimer); notesTimer = setTimeout(saveFocus, 500); });
 $('fcStart').addEventListener('click', () => {
   if (F.endAt) { F.left = Math.max(1000, F.endAt - Date.now()); F.endAt = 0; focusWake(false); }
   else { F.endAt = Date.now() + (F.left || focusDur(F.mode)); F.left = 0; focusBeepPrime(); focusWake(true); }
@@ -1355,6 +1360,140 @@ $('bkRestoreCancel').addEventListener('click', () => { BK.pending = null; $('bkR
 $('bkBanner').addEventListener('click', makeBackup);
 $('bkBtnHome').addEventListener('click', makeBackup);
 $('bkRestoreHome').addEventListener('click', () => { $('bkFile').value = ''; $('bkFile').click(); });
+
+// ---------- plano de estudo: carga de revisões e novos por dia ----------
+const PLAN = { exam: '', minutes: 30, maxRev: 0 };
+const savePlan = () => Store.kvSet('plan', PLAN).catch(()=>{});
+const revDone = pkg => { const d = (A.stats[pkg] || {})[dayKey()]; return d ? (d[1] || 0) : 0; };
+const todayTotals = () => { const k = dayKey(), t = [0,0,0,0,0]; for (const p in A.stats) { const a = A.stats[p][k]; if (a) for (let i = 0; i < 5; i++) t[i] += a[i] || 0; } return t; };
+// respostas que um card novo pede até a prova, acertando sempre, mais uma folga para os esquecimentos
+function reviewsPerCard(days){
+  const L = window.FSRS; if (!L) return null;
+  // sem a variação aleatória dos intervalos, para a conta dar sempre o mesmo resultado
+  const sim = L.fsrs(L.generatorParameters({ request_retention: A.prefs.retention, maximum_interval: 36500, enable_fuzz: false, enable_short_term: true, learning_steps: ['1m','10m'], relearning_steps: ['10m'] }));
+  const now = new Date(), end = +now + Math.max(1, days) * DAY;
+  let c = L.createEmptyCard(now), n = 0, t = now;
+  while (+c.due <= end && n < 400) { t = new Date(Math.max(+c.due, +t)); c = sim.next(c, t, L.Rating.Good).card; n++; }
+  return n * (1 + (1 - A.prefs.retention) * 3);
+}
+function forecast(days){
+  const start = dayStart(), out = new Array(days).fill(0);
+  for (const [id, st] of A.states) {
+    if (!st || st.st === 0) continue; const c = A.cards.get(id); if (!c || c.susp) continue;
+    const i = Math.max(0, Math.floor((st.d - start) / DAY)); if (i < days) out[i]++;
+  }
+  return out;
+}
+async function drawPlan(){
+  if (A.view !== 'plan') return;
+  if (!A.fsrs) { try { await loadScript(CDN.fsrs); makeFsrs(); } catch(e) {} }
+  $('plExam').value = PLAN.exam || ''; if (document.activeElement !== $('plMin')) $('plMin').value = PLAN.minutes;
+  $('plRet').value = String(Math.round(A.prefs.retention * 100)); $('plMaxRev').value = String(PLAN.maxRev || 0);
+  const log = (await Store.getAll('revlog')).filter(r => r.id > Date.now() - 30 * DAY && r.time > 0);
+  const measured = log.length >= 30;
+  const secPer = measured ? Math.min(60, Math.max(4, log.reduce((s, r) => s + r.time, 0) / log.length / 1000)) : 15;
+  const cap = Math.max(1, Math.round(PLAN.minutes * 60 / secPer));
+  const fc = forecast(30), base = Math.round(fc.slice(1).reduce((s, x) => s + x, 0) / 29);
+  const daysLeft = PLAN.exam ? Math.max(1, Math.round((new Date(PLAN.exam + 'T12:00:00') - Date.now()) / DAY)) : 365;
+  const rpc = reviewsPerCard(daysLeft);
+  let html = '<div class="statgrid"><div class="stat"><b>' + cap + '</b><span>respostas por dia cabem em ' + PLAN.minutes + ' min</span></div><div class="stat"><b>' + Math.round(secPer) + ' s</b><span>por card (' + (measured ? 'medido aqui' : 'estimativa') + ')</span></div><div class="stat"><b>' + (PLAN.exam ? daysLeft : '–') + '</b><span>' + (PLAN.exam ? 'dias até a prova' : 'sem data de prova') + '</span></div></div>';
+  if (rpc) {
+    const free = Math.max(0, cap - base), sug = Math.floor(free / rpc), cur = A.prefs.newPerDay, peak = Math.round(base + cur * rpc);
+    html += '<div class="paper" style="margin-top:14px"><div class="head"><span>Cards novos por dia</span></div><div class="body">' +
+      '<p style="margin:0 0 10px">Cada card novo pede cerca de <b>' + rpc.toFixed(1).replace('.', ',') + ' respostas</b> ' + (PLAN.exam ? 'até a prova' : 'em um ano') + '. Os cards que você já tem pedem cerca de ' + base + ' por dia.</p>' +
+      '<p style="margin:0 0 10px">Para caber no seu tempo: <b class="plbig">' + sug + '</b> ' + (sug === 1 ? 'novo' : 'novos') + ' por dia, o que dá cerca de <b>' + (sug * daysLeft).toLocaleString('pt-BR') + '</b> cards novos ' + (PLAN.exam ? 'até a prova' : 'em um ano') + '.</p>' +
+      '<p class="note" style="margin:0 0 12px">Hoje está em ' + cur + ' por dia: a carga chegaria a cerca de ' + peak + ' respostas por dia' + (peak > cap ? ', acima das ' + cap + ' que cabem.' : ', dentro do que cabe.') + ' É uma estimativa com os parâmetros padrão do FSRS e ' + Math.round(A.prefs.retention * 100) + '% de retenção.</p>' +
+      (sug !== cur ? '<button class="primary" id="plApply" data-n="' + sug + '">Usar ' + sug + ' por dia</button>' : '<p class="note" style="margin:0">Já está no valor sugerido.</p>') + '</div></div>';
+  }
+  html += '<div class="paper" style="margin-top:14px"><div class="head"><span>Revisões já agendadas, próximos 30 dias</span><span>hoje ' + fc[0] + '</span></div><div class="body">' + barSvg(fc, 'Revisões agendadas por dia nos próximos 30 dias', 'var(--accent)') +
+    '<p class="note" style="margin:8px 0 0">Só os cards que você já estudou. Cada card novo que entrar soma a isso.</p></div></div>';
+  $('plOut').innerHTML = html;
+}
+RENDER.plan = function(){ show('plan', 'Plano de estudo', true); drawPlan(); };
+$('plExam').addEventListener('change', e => { PLAN.exam = e.target.value || ''; savePlan(); drawPlan(); });
+$('plMin').addEventListener('change', e => { PLAN.minutes = Math.min(600, Math.max(5, Math.round(Number(e.target.value)) || 30)); e.target.value = PLAN.minutes; savePlan(); drawPlan(); });
+$('plRet').addEventListener('change', e => { A.prefs.retention = Number(e.target.value) / 100; savePrefs(); drawPlan(); });
+$('plMaxRev').addEventListener('change', e => { PLAN.maxRev = Number(e.target.value) || 0; savePlan(); drawPlan(); });
+$('plOut').addEventListener('click', e => { const b = e.target.closest('#plApply'); if (!b) return; A.prefs.newPerDay = Number(b.dataset.n); savePrefs(); toast('Cards novos por dia: ' + A.prefs.newPerDay + '.'); drawPlan(); });
+$('planBtnHome').addEventListener('click', () => go('plan'));
+
+// ---------- desempenho (estatísticas avançadas) ----------
+async function drawPerf(ids){
+  const body = $('statsBody');
+  const all = (await Store.getAll('revlog')).filter(r => ids.includes(r.pkg));
+  if (ST.tab !== 'desempenho') return;
+  const since = Date.now() - 30 * DAY, log = all.filter(r => r.id > since);
+  const hist = histFor(ids), today = dayStart();
+  const weeks = []; for (let w = 11; w >= 0; w--) { let s = 0; for (let d = 0; d < 7; d++) s += (hist[dayKey(today - (w * 7 + d) * DAY + 6 * 3600e3)] || [0])[0] || 0; weeks.push(s); }
+  let d30 = 0, d90 = 0; for (let i = 0; i < 90; i++) if ((hist[dayKey(today - i * DAY + 6 * 3600e3)] || [0])[0]) { d90++; if (i < 30) d30++; }
+  let html = '';
+  if (log.length < 10) html += '<p class="note" style="margin-top:14px">Precisão, tempo e desempenho por área aparecem depois de umas 10 respostas dadas aqui no app. O histórico que veio do Anki entra só na contagem por dia e por semana.</p>';
+  else {
+    const n = log.length, wrong = log.filter(r => r.ease === 1).length, rev = log.filter(r => r.type === 1), revOk = rev.filter(r => r.ease > 1).length;
+    const ms = log.reduce((s, r) => s + (r.time || 0), 0), pct = (x, y) => y ? Math.round(x / y * 100) + '%' : '–';
+    const mins = ms / 60000;
+    html += '<div class="statgrid"><div class="stat"><b>' + pct(n - wrong, n) + '</b><span>precisão em 30 dias</span></div><div class="stat"><b>' + pct(revOk, rev.length) + '</b><span>retenção nas revisões (alvo ' + Math.round(A.prefs.retention * 100) + '%)</span></div><div class="stat"><b>' + (ms / n / 1000).toFixed(1).replace('.', ',') + ' s</b><span>por card</span></div>' +
+      '<div class="stat"><b>' + (mins >= 90 ? (mins / 60).toFixed(1).replace('.', ',') + ' h' : Math.round(mins) + ' min') + '</b><span>estudando em 30 dias</span></div><div class="stat"><b>' + (mins ? (n / mins).toFixed(1).replace('.', ',') : '–') + '</b><span>cards por minuto</span></div><div class="stat"><b>' + d30 + ' / 30</b><span>dias estudados</span></div></div>';
+    const names = ['Errei', 'Difícil', 'Bom', 'Fácil'], cols = ['var(--again)', 'var(--hard)', 'var(--good)', 'var(--easy)'], cnt = [1,2,3,4].map(g => log.filter(r => r.ease === g).length);
+    html += '<div class="paper" style="margin-top:14px"><div class="head"><span>Como você respondeu</span><span>' + n + ' respostas</span></div><div class="body"><div class="stackbar" role="img" aria-label="' + names.map((nm, i) => nm + ' ' + pct(cnt[i], n)).join(', ') + '">' + cnt.map((c, i) => c ? '<i style="flex:' + c + ';background:' + cols[i] + '"></i>' : '').join('') + '</div><div class="stackleg">' + names.map((nm, i) => '<span><i style="background:' + cols[i] + '"></i>' + nm + ' ' + pct(cnt[i], n) + '</span>').join('') + '</div></div></div>';
+    const young = rev.filter(r => (r.lastIvl || 0) < 21), mature = rev.filter(r => (r.lastIvl || 0) >= 21), ok = l => l.filter(r => r.ease > 1).length;
+    if (rev.length >= 10) html += '<div class="paper" style="margin-top:14px"><div class="head"><span>Retenção por idade do card</span></div><div class="body"><div class="rows2"><span>Recentes (intervalo menor que 21 dias)</span><b>' + pct(ok(young), young.length) + '<small> de ' + young.length + '</small></b><span>Maduros (21 dias ou mais)</span><b>' + pct(ok(mature), mature.length) + '<small> de ' + mature.length + '</small></b></div></div></div>';
+    const byArea = new Map();
+    for (const r of log) {
+      const c = A.cards.get(r.cid), p = c && A.pkgs.get(c.pkg); if (!p) continue;
+      const path = p.decks[c.did] || [p.name], ar = areaOfPath(path);
+      const name = ar.key ? AREAS.find(x => x[0] === ar.key)[1] : (path[1] || path[0]);
+      const g = byArea.get(name) || { n: 0, w: 0, ms: 0 }; g.n++; if (r.ease === 1) g.w++; g.ms += r.time || 0; byArea.set(name, g);
+    }
+    const rowsA = [...byArea.entries()].filter(([, g]) => g.n >= 5).sort((x, y) => (x[1].n - x[1].w) / x[1].n - (y[1].n - y[1].w) / y[1].n);
+    if (rowsA.length) html += '<div class="paper" style="margin-top:14px"><div class="head"><span>Por área, da que você mais erra para a que mais acerta</span></div><div class="body"><table class="perf"><thead><tr><th scope="col">Área</th><th scope="col">Acerto</th><th scope="col">Respostas</th><th scope="col">Tempo</th></tr></thead><tbody>' +
+      rowsA.map(([nm, g]) => { const acc = (g.n - g.w) / g.n; return '<tr><th scope="row">' + esc(nm) + '</th><td class="' + (acc < 0.8 ? 'bad' : acc < 0.9 ? 'warn' : 'ok') + '">' + Math.round(acc * 100) + '%</td><td>' + g.n + '</td><td>' + Math.round(g.ms / g.n / 1000) + ' s</td></tr>'; }).join('') + '</tbody></table><p class="note" style="margin:8px 0 0">Só áreas com 5 respostas ou mais nos últimos 30 dias.</p></div></div>';
+    const per = [['Madrugada', 0, 5], ['Manhã', 5, 12], ['Tarde', 12, 18], ['Noite', 18, 24]].map(([nm, a, b]) => { const l = log.filter(r => { const h = new Date(r.id).getHours(); return h >= a && h < b; }); return [nm, l.length, l.length ? ok(l) / l.length : 0]; }).filter(x => x[1] >= 20);
+    if (per.length >= 2) html += '<div class="paper" style="margin-top:14px"><div class="head"><span>Acerto por horário</span></div><div class="body"><div class="rows2">' + per.map(x => '<span>' + x[0] + '</span><b>' + Math.round(x[2] * 100) + '%<small> de ' + x[1] + '</small></b>').join('') + '</div></div></div>';
+  }
+  html += '<div class="paper" style="margin-top:14px"><div class="head"><span>Respostas por semana, últimas 12</span><span>' + d90 + ' dias estudados em 90</span></div><div class="body">' + barSvg(weeks, 'Respostas por semana nas últimas 12 semanas', 'var(--accent)') + '</div></div>';
+  body.innerHTML = html;
+}
+
+// ---------- desafios do dia ----------
+const CH_XP = 30;
+const CH_POOL = [
+  { id: 'ans', tiers: [40, 80, 120], text: n => 'Responda ' + n + ' cards', val: () => todayTotals()[0] },
+  { id: 'new', tiers: [5, 10], text: n => 'Estude ' + n + ' cards novos', val: () => todayTotals()[3] },
+  { id: 'combo', tiers: [10, 20, 30], text: n => 'Acerte ' + n + ' seguidas', val: () => (A.game.ch && A.game.ch.best) || 0 },
+  { id: 'goal', tiers: [1], text: () => 'Bata a meta de XP do dia', val: () => (A.game.days[dayKey()] || 0) >= dailyGoal() ? 1 : 0 },
+  { id: 'focus', tiers: [1, 2], text: n => 'Conclua ' + n + (n === 1 ? ' ciclo de foco' : ' ciclos de foco'), val: () => F.day === dayKey() ? F.doneToday : 0 },
+  { id: 'make', tiers: [1, 3], text: n => 'Crie ' + n + (n === 1 ? ' card' : ' cards'), val: () => (A.game.ch && A.game.ch.made) || 0 }
+];
+function chState(){
+  const k = dayKey(), g = A.game;
+  if (!g.ch || g.ch.day !== k) g.ch = { day: k, done: [], combo: 0, best: 0, made: 0 };
+  return g.ch;
+}
+function todaysChallenges(){
+  const k = dayKey(), h = hashStr('ch' + k), picks = [], pool = CH_POOL.slice();
+  for (let i = 0; i < 3; i++) { const c = pool.splice((h >>> (i * 5)) % pool.length, 1)[0]; picks.push({ c, goal: c.tiers[(h >>> (i * 3 + 7)) % c.tiers.length] }); }
+  return picks;
+}
+function checkChallenges(){
+  if (!A.game) return;
+  const s = chState();
+  for (const { c, goal } of todaysChallenges()) {
+    if (s.done.includes(c.id) || c.val() < goal) continue;
+    s.done.push(c.id);
+    toast('Desafio concluído: ' + c.text(goal) + '. +' + CH_XP + ' XP.');
+    addXp(CH_XP);
+  }
+}
+function chAnswer(g){ const s = chState(); if (g > 1) { s.combo++; s.best = Math.max(s.best, s.combo); } else s.combo = 0; }
+function drawChallenges(){
+  const el = $('chBox'); if (!el || !A.game) return;
+  const s = chState();
+  el.innerHTML = '<div class="paper ch"><div class="head"><span>Desafios de hoje</span><span>+' + CH_XP + ' XP cada</span></div><ul>' + todaysChallenges().map(({ c, goal }) => {
+    const done = s.done.includes(c.id), v = Math.min(goal, c.val());
+    return '<li class="' + (done ? 'done' : '') + '"><span class="chk2" aria-hidden="true">' + (done ? '✓' : '') + '</span><span class="cht">' + esc(c.text(goal)) + '</span><span class="chv">' + (done ? 'feito' : v + ' / ' + goal) + '</span><span class="chbar"><i style="width:' + Math.round((done ? 1 : v / goal) * 100) + '%"></i></span></li>';
+  }).join('') + '</ul></div>';
+}
 
 // ---------- deck ----------
 function deckTree(pkg){
@@ -1629,6 +1768,7 @@ function pick(){
   nw.sort((a, b) => a.pos - b.pos); nw = nw.slice(0, left);
   const byDue = (a, b) => A.states.get(a.id).d - A.states.get(b.id).d;
   lrnNow.sort(byDue); rev.sort(byDue); lrnSoon.sort(byDue);
+  if (PLAN.maxRev) rev.length = Math.min(rev.length, Math.max(0, PLAN.maxRev - revDone(S.pkg)));
   const counts = { n: nw.length, l: lrnNow.length + lrnSoon.length + lrnToday, r: rev.length };
   const notLast = arr => (arr.length > 1 && arr[0].id === S.lastId) ? arr[1] : arr[0];
   let card = null, kind = null;
@@ -1747,6 +1887,7 @@ function answer(g){
     lastIvl: !prev || prev.st === 0 ? 0 : prev.st === 2 ? Math.max(1, prev.sd || 1) : -600,
     factor: Math.round(st.f * 100), time: Math.min(60000, Math.max(0, now - (S.shownAt || now))),
     type: !prev || prev.st === 0 || prev.st === 1 ? 0 : prev.st === 2 ? 1 : 2 }]).catch(()=>{});
+  chAnswer(g);
   const gx = XP_GRADE[g] + (wasNew ? XP_NEW : 0);
   S.undo.push({ id: S.card.id, prev, wasNew, g, revId, xp: gx });
   addXp(gx);
@@ -2008,6 +2149,7 @@ async function saveNewNote(pkg, v, image){
   await Store.putMany('pkgs', [p]);
   A.noteCache.delete(pkg); mediaCache.delete(pkg + '/' + (image && image.name));
   markNote(note);
+  chState().made++;
   addXp(XP_CREATE);
   return { cards: cards.map(c => c.id), did: v.did, mid: v.mid, tags: v.tags };
 }
@@ -2820,6 +2962,7 @@ function errStatsHtml(ids){
 function drawStats(){
   const scope = $('statsScope').value;
   const ids = scope ? [scope] : [...A.pkgs.keys()];
+  if (ST.tab === 'desempenho') { $('statsBody').innerHTML = '<p class="note" style="margin-top:14px">Calculando…</p>'; drawPerf(ids); return; }
   if (ST.tab === 'areas') { if (!ids.length) { $('statsBody').innerHTML = '<p class="note">Importe ou crie um deck para ver as estatísticas.</p>'; return; } drawAreaStats(ids); return; }
   if (ST.tab === 'erros') { $('statsBody').innerHTML = errStatsHtml(ids); if (!A.fsrs) loadScript(CDN.fsrs).then(() => { makeFsrs(); if (ST.tab === 'erros') $('statsBody').innerHTML = errStatsHtml(ids); }).catch(()=>{}); return; }
   drawGeneralStats();
@@ -3213,7 +3356,8 @@ window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').addEventL
       }
     }
   } catch(e) {}
-  try { const g = await Store.kvGet('game'); A.game = g && typeof g.xp === 'number' ? { xp: g.xp, days: g.days || {}, goal: g.goal || 0 } : { xp: 0, days: {} }; } catch(e) { A.game = { xp: 0, days: {} }; }
+  try { const g = await Store.kvGet('game'); A.game = g && typeof g.xp === 'number' ? { xp: g.xp, days: g.days || {}, goal: g.goal || 0, ch: g.ch || null } : { xp: 0, days: {} }; } catch(e) { A.game = { xp: 0, days: {} }; }
+  try { const pl = await Store.kvGet('plan'); if (pl && typeof pl === 'object') Object.assign(PLAN, pl); } catch(e) {}
   try { const b = await Store.kvGet('backup'); if (b && b.at) BK.at = b.at; } catch(e) {}
   try { const f = await Store.kvGet('focus'); if (f && typeof f === 'object') Object.assign(F, f, { tasks: Array.isArray(f.tasks) ? f.tasks : [] }); } catch(e) {}
   go('home', {}, { reset:true });
