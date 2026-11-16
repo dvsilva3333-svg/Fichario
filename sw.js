@@ -1,7 +1,7 @@
 /* Fichário — service worker: keeps the app working with no internet.
    App files: try the network first (so updates arrive), fall back to the saved copy.
    Libraries and icons: saved copy first, they only change when VERSION changes. */
-const VERSION = 'fichario-v2';
+const VERSION = 'fichario-v3';
 const SHELL = [
   './', 'index.html', 'css/fichario.css', 'js/core.js', 'js/app.js', 'manifest.webmanifest',
   'vendor/ts-fsrs.umd.js', 'vendor/jszip.min.js', 'vendor/fzstd.js', 'vendor/sql-asm.js',

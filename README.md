@@ -59,4 +59,5 @@ Não há etapa de build: os arquivos são servidos como estão.
 
 ## Ao alterar o app
 
-Mudou qualquer arquivo de `vendor/` ou `icons/`? Troque o valor de `VERSION` em `sw.js`, senão os aparelhos continuam com a cópia antiga.
+- Mudou `js/` ou `css/`? Troque o `?v=...` das três linhas de `index.html` que carregam `css/fichario.css`, `js/core.js` e `js/app.js`. Isso garante que a página e o código cheguem juntos ao aparelho; sem isso, uma página nova pode rodar com código antigo por alguns minutos e abrir quebrada.
+- Mudou `vendor/` ou `icons/`? Troque o valor de `VERSION` em `sw.js`.
