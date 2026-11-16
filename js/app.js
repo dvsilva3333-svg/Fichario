@@ -1178,6 +1178,7 @@ function focusFinish(completed){
     F.mode = completed && F.cycle % Math.max(1, F.every) === 0 ? 'long' : 'brk';
   } else F.mode = 'work';
   saveFocus(); focusWake(false);
+  if (completed) checkChallenges();
   if (completed) {
     focusBeep(); try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch(e) {}
     toast(was === 'work' ? 'Ciclo de foco concluído: +' + FOCUS_XP + ' XP. Hora da ' + focusLabel(F.mode).toLowerCase() + '.' : 'Pausa encerrada. Bora para o próximo ciclo.');
@@ -1241,7 +1242,7 @@ $('taskForm').addEventListener('submit', e => {
 $('taskList').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const id = b.closest('li').dataset.id, t = F.tasks.find(x => x.id === id); if (!t) return;
-  if (b.dataset.act === 'check') { t.done = !t.done; if (t.done && F.cur === id) { const n = F.tasks.find(x => !x.done); F.cur = n ? n.id : null; } }
+  if (b.dataset.act === 'check') { t.done = !t.done; const cs = chState(); cs.tasks = Math.max(0, (cs.tasks || 0) + (t.done ? 1 : -1)); if (t.done) checkChallenges(); if (t.done && F.cur === id) { const n = F.tasks.find(x => !x.done); F.cur = n ? n.id : null; } }
   else if (b.dataset.act === 'pick') F.cur = id;
   else if (b.dataset.act === 'del') { F.tasks = F.tasks.filter(x => x.id !== id); if (F.cur === id) F.cur = null; }
   saveFocus(); drawFocus();
@@ -1456,23 +1457,45 @@ async function drawPerf(ids){
 
 // ---------- desafios do dia ----------
 const CH_XP = 30;
+// O que dá para fazer hoje: o que já foi respondido mais o que ainda está na fila dos decks.
+function todayAvail(){
+  let left = 0, newLeft = 0;
+  for (const p of A.pkgs.values()) { const k = countsFor(pkgCards(p.id), p.id); left += k.n + k.l + k.r; newLeft += k.n; }
+  const t = todayTotals();
+  return { answers: t[0] + left, news: t[3] + newLeft };
+}
+const round5 = n => n >= 20 ? Math.round(n / 5) * 5 : Math.round(n);
+// Cada desafio diz se cabe no dia (goal devolve 0 quando não cabe) e mede o próprio progresso.
 const CH_POOL = [
-  { id: 'ans', tiers: [40, 80, 120], text: n => 'Responda ' + n + ' cards', val: () => todayTotals()[0] },
-  { id: 'new', tiers: [5, 10], text: n => 'Estude ' + n + ' cards novos', val: () => todayTotals()[3] },
-  { id: 'combo', tiers: [10, 20, 30], text: n => 'Acerte ' + n + ' seguidas', val: () => (A.game.ch && A.game.ch.best) || 0 },
-  { id: 'goal', tiers: [1], text: () => 'Bata a meta de XP do dia', val: () => (A.game.days[dayKey()] || 0) >= dailyGoal() ? 1 : 0 },
-  { id: 'focus', tiers: [1, 2], text: n => 'Conclua ' + n + (n === 1 ? ' ciclo de foco' : ' ciclos de foco'), val: () => F.day === dayKey() ? F.doneToday : 0 },
-  { id: 'make', tiers: [1, 3], text: n => 'Crie ' + n + (n === 1 ? ' card' : ' cards'), val: () => (A.game.ch && A.game.ch.made) || 0 }
+  { id: 'ans', goal: (a, r) => a.answers >= 5 ? Math.max(5, round5(a.answers * [0.5, 0.75, 1][r % 3])) : 0, text: n => 'Responda ' + n + ' cards', val: () => todayTotals()[0] },
+  { id: 'new', goal: (a, r) => a.news >= 3 ? Math.max(3, Math.min(a.news, [5, 10][r % 2])) : 0, text: n => 'Estude ' + n + ' cards novos', val: () => todayTotals()[3] },
+  { id: 'combo', goal: (a, r) => a.answers >= 8 ? Math.max(5, Math.min([10, 20, 30][r % 3], Math.floor(a.answers * 0.6))) : 0, text: n => 'Acerte ' + n + ' seguidas', val: () => (A.game.ch && A.game.ch.best) || 0 },
+  { id: 'goal', goal: a => a.answers * 11 >= dailyGoal() ? 1 : 0, text: () => 'Bata a meta de XP do dia', val: () => (A.game.days[dayKey()] || 0) >= dailyGoal() ? 1 : 0 },
+  { id: 'focus', goal: (a, r) => [1, 2][r % 2], text: n => 'Conclua ' + n + (n === 1 ? ' ciclo de foco' : ' ciclos de foco'), val: () => F.day === dayKey() ? F.doneToday : 0 },
+  { id: 'make', goal: (a, r) => A.pkgs.size ? [1, 3][r % 2] : 0, text: n => 'Crie ' + n + (n === 1 ? ' card' : ' cards'), val: () => (A.game.ch && A.game.ch.made) || 0 },
+  { id: 'task', goal: () => 1, text: () => 'Conclua 1 tarefa da sua lista', val: () => (A.game.ch && A.game.ch.tasks) || 0 }
 ];
 function chState(){
   const k = dayKey(), g = A.game;
-  if (!g.ch || g.ch.day !== k) g.ch = { day: k, done: [], combo: 0, best: 0, made: 0 };
+  if (!g.ch || g.ch.day !== k) g.ch = { day: k, done: [], combo: 0, best: 0, made: 0, tasks: 0, picks: null, basis: -1 };
   return g.ch;
 }
+// Sorteia três desafios que cabem no dia e guarda as metas, para não mudarem enquanto você estuda.
+// Se a quantidade de cards mudar (importou ou apagou um deck), sorteia de novo o que ainda não foi concluído.
 function todaysChallenges(){
-  const k = dayKey(), h = hashStr('ch' + k), picks = [], pool = CH_POOL.slice();
-  for (let i = 0; i < 3; i++) { const c = pool.splice((h >>> (i * 5)) % pool.length, 1)[0]; picks.push({ c, goal: c.tiers[(h >>> (i * 3 + 7)) % c.tiers.length] }); }
-  return picks;
+  const s = chState();
+  if (!s.picks || s.basis !== A.cards.size) {
+    const a = todayAvail(), h = hashStr('ch' + s.day), kept = (s.picks || []).filter(p => s.done.includes(p.id));
+    const pool = CH_POOL.map((c, i) => ({ id: c.id, goal: c.goal(a, (h >>> (i * 3)) & 7) })).filter(p => p.goal > 0 && !kept.some(k => k.id === p.id));
+    const picks = kept.slice();
+    // havendo cards na fila, pelo menos um desafio é de estudo
+    const study = pool.filter(p => ['ans', 'new', 'combo', 'goal'].includes(p.id));
+    if (study.length && !picks.some(p => ['ans', 'new', 'combo', 'goal'].includes(p.id))) { const first = study[h % study.length]; picks.push(first); pool.splice(pool.indexOf(first), 1); }
+    for (let i = 0; picks.length < 3 && pool.length; i++) picks.push(pool.splice((h >>> (i * 5 + 3)) % pool.length, 1)[0]);
+    s.picks = picks; s.basis = A.cards.size;
+    clearTimeout(gameTimer); gameTimer = setTimeout(() => Store.kvSet('game', A.game).catch(()=>{}), 250);
+  }
+  return s.picks.map(p => ({ c: CH_POOL.find(c => c.id === p.id), goal: p.goal })).filter(x => x.c);
 }
 function checkChallenges(){
   if (!A.game) return;
