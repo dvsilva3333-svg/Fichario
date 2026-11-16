@@ -1,7 +1,7 @@
 /* Fichário — service worker: keeps the app working with no internet.
    App files: try the network first (so updates arrive), fall back to the saved copy.
    Libraries and icons: saved copy first, they only change when VERSION changes. */
-const VERSION = 'fichario-v1';
+const VERSION = 'fichario-v2';
 const SHELL = [
   './', 'index.html', 'css/fichario.css', 'js/core.js', 'js/app.js', 'manifest.webmanifest',
   'vendor/ts-fsrs.umd.js', 'vendor/jszip.min.js', 'vendor/fzstd.js', 'vendor/sql-asm.js',
@@ -26,7 +26,9 @@ self.addEventListener('fetch', e => {
       if (hit) return hit;
     }
     try {
-      const res = await fetch(req);
+      // 'no-cache' makes the browser check with the server instead of trusting its own
+      // copy for 10 minutes, so an update shows up the next time the app is opened
+      const res = await fetch(req, { cache: 'no-cache' });
       if (res && res.ok) cache.put(req, res.clone());
       return res;
     } catch (err) {

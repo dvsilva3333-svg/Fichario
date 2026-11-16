@@ -1357,7 +1357,6 @@ $('bkRestoreBtn').addEventListener('click', () => { $('bkFile').value = ''; $('b
 $('bkFile').addEventListener('change', () => { const f = $('bkFile').files[0]; if (f) readBackup(f); });
 $('bkRestoreGo').addEventListener('click', applyBackup);
 $('bkRestoreCancel').addEventListener('click', () => { BK.pending = null; $('bkRestoreBox').hidden = true; });
-$('bkBanner').addEventListener('click', makeBackup);
 $('bkBtnHome').addEventListener('click', makeBackup);
 $('bkRestoreHome').addEventListener('click', () => { $('bkFile').value = ''; $('bkFile').click(); });
 
