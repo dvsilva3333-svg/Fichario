@@ -488,3 +488,12 @@ textarea.inp{width:100%;resize:vertical;min-height:46px;line-height:1.4;font-fam
 .task .tx{flex:none;width:44px;height:44px;font-size:24px;color:var(--muted)}
 .taskempty{color:var(--muted);padding:14px 2px 4px;font-size:15px}
 @media (prefers-reduced-motion: reduce){.fcring .arc{transition:none}}
+
+/* ---------- backup ---------- */
+.bkbanner{appearance:none;border:0;cursor:pointer;width:100%;margin-top:12px;padding:12px 14px;border-radius:16px;display:flex;align-items:center;gap:10px;text-align:left;font:inherit;font-size:15px;background:#FFF4D6;color:#5C3B00}
+.bkbanner svg{width:22px;height:22px;flex:none}
+.bkbanner span{flex:1;min-width:0}
+.bkbanner b{flex:none;font-size:14px;padding:7px 11px;border-radius:999px;background:#5C3B00;color:#FFF4D6}
+.bkrestore{margin-top:12px;padding:14px;border-radius:14px;border:1.5px solid var(--again);display:grid;gap:10px}
+.bkrestore p{margin:0}
+#bkNote:empty{display:none}

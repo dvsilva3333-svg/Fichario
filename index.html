@@ -38,6 +38,7 @@
 <main>
   <section class="view wrap" id="home">
     <div class="gamehero"></div>
+    <button class="bkbanner" id="bkBanner" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11M7.5 9.5L12 14l4.5-4.5M5 19h14"/></svg><span></span><b>Fazer backup</b></button>
     <div id="homeList"></div>
     <div id="heat"></div>
     <p class="sectionlabel">Ferramentas</p>
@@ -335,9 +336,23 @@
       <p>O editor mostra essa legenda, e o Claude pinta as palavras-chave dos cards seguindo ela.</p>
     </div>
     <div class="field">
+      <label>Cópia de segurança</label>
+      <p id="bkStatus"></p>
+      <p>Um arquivo só, com todos os decks, imagens, progresso, caderno de erros, XP e tarefas. Guarde fora do aparelho. Para passar tudo para outro aparelho, faça o backup aqui e restaure lá.</p>
+      <button class="primary" id="bkBtn" style="margin-top:10px">Fazer backup agora</button>
+      <p class="note" id="bkNote" aria-live="polite"></p>
+      <button class="secondary" id="bkRestoreBtn" style="margin-top:10px">Restaurar de um backup</button>
+      <input type="file" id="bkFile" accept=".zip,application/zip" hidden>
+      <div class="bkrestore" id="bkRestoreBox" hidden>
+        <p id="bkRestoreText"></p>
+        <button class="danger" id="bkRestoreGo">Apagar o que está aqui e restaurar</button>
+        <button class="secondary" id="bkRestoreCancel">Cancelar</button>
+      </div>
+    </div>
+    <div class="field">
       <label>Onde o progresso fica</label>
       <p id="syncStatus3"></p>
-      <p>Os decks ficam guardados neste aparelho. Para levar tudo a outro aparelho, abra o deck, toque em Preparar arquivo .apkg com o progresso incluído e importe esse arquivo no outro aparelho. Vale também como cópia de segurança.</p>
+      <p>Os decks ficam guardados neste aparelho. Se o navegador limpar os dados do site ou o app for removido, só volta o que estiver num backup.</p>
     </div>
   </section>
 </main>

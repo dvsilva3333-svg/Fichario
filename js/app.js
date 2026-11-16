@@ -152,7 +152,20 @@ const Store = (function(){
     for (const m of media) ms.put(m);
     return done(t);
   }
-  return { open, getAll, get, getByIndex, putMany, deleteMany, allStates, putStates, delState, kvGet, kvSet, importPkg, removePkg, isMemory: () => !!mem };
+  const ALL = ['pkgs','notes','cards','media','states','kv','revlog','errors'];
+  async function clearAll(){
+    if (mem) { for (const n of ALL) mem[n].clear(); return; }
+    const t = db.transaction(ALL, 'readwrite'); for (const n of ALL) t.objectStore(n).clear(); return done(t);
+  }
+  async function allKv(){
+    const out = {};
+    if (mem) { for (const [k, v] of mem.kv) out[k] = v; return out; }
+    const os = db.transaction('kv').objectStore('kv');
+    const [keys, vals] = await Promise.all([req(os.getAllKeys()), req(os.getAll())]);
+    keys.forEach((k, i) => { out[k] = vals[i]; });
+    return out;
+  }
+  return { open, getAll, get, getByIndex, putMany, deleteMany, allStates, putStates, delState, kvGet, kvSet, importPkg, removePkg, clearAll, allKv, isMemory: () => !!mem };
 })();
 
 // ---------- app state ----------
@@ -918,7 +931,7 @@ $('ovClose').addEventListener('click', progressHide);
 
 // ---------- home ----------
 RENDER.home = function(){
-  drawGame(); drawHeat();
+  drawGame(); drawHeat(); drawBkBanner();
   if (!A.pkgs.size) { show('empty'); return; }
   show('home');
   const pk = [...A.pkgs.values()].sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
@@ -1233,6 +1246,110 @@ $('focusBtnHome').addEventListener('click', () => go('focus'));
 $('focusPill').addEventListener('click', () => { if (A.view !== 'focus') go('focus'); });
 setInterval(focusTick, 1000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { focusTick(); if (F.endAt && A.view === 'focus') focusWake(true); } });
+
+// ---------- cópia de segurança ----------
+// Um único arquivo .zip com tudo o que o app guarda neste aparelho: decks, cards, imagens,
+// progresso, histórico, caderno de erros, XP, tarefas e ajustes.
+const BK = { blob: null, name: '', pending: null, at: 0 };
+const BK_DAYS = 7;
+function bkEncode(v, files){
+  if (v instanceof Blob) { const f = 'b/' + files.length; files.push([f, v]); return { __blob: f, type: v.type }; }
+  if (Array.isArray(v)) return v.map(x => bkEncode(x, files));
+  if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = bkEncode(v[k], files); return o; }
+  return v;
+}
+async function bkDecode(v, zip){
+  if (Array.isArray(v)) { const out = []; for (const x of v) out.push(await bkDecode(x, zip)); return out; }
+  if (v && typeof v === 'object') {
+    if (typeof v.__blob === 'string') { const f = zip.file(v.__blob); return f ? new Blob([await f.async('uint8array')], { type: v.type || '' }) : null; }
+    const o = {}; for (const k in v) o[k] = await bkDecode(v[k], zip); return o;
+  }
+  return v;
+}
+function bkStatus(){
+  const el = $('bkStatus'); if (!el) return;
+  el.textContent = BK.at ? 'Último backup feito neste aparelho: ' + new Date(BK.at).toLocaleDateString('pt-BR') + ' às ' + new Date(BK.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '.' : 'Nenhum backup feito neste aparelho ainda.';
+  $('bkBtn').textContent = BK.blob ? 'Salvar ' + BK.name : 'Fazer backup agora';
+  $('bkNote').textContent = BK.blob ? 'Arquivo pronto. Toque de novo para salvar; no iPhone, escolha “Salvar em Arquivos” e uma pasta do iCloud Drive.' : '';
+}
+function drawBkBanner(){
+  const el = $('bkBanner'); if (!el) return;
+  const days = BK.at ? Math.floor((Date.now() - BK.at) / DAY) : -1;
+  const show = A.pkgs.size > 0 && A.cards.size > 0 && (days < 0 ? (A.game && A.game.xp > 0) : days >= BK_DAYS);
+  el.hidden = !show;
+  if (show) el.querySelector('span').textContent = days < 0 ? 'Seus cards só existem neste aparelho. Faça o primeiro backup.' : 'Último backup há ' + days + ' dias. Vale fazer outro.';
+}
+async function makeBackup(){
+  if (BK.blob) {
+    try {
+      await saveFile(BK.name, BK.blob, 'application/zip');
+      BK.at = Date.now(); BK.blob = null; await Store.kvSet('backup', { at: BK.at });
+      bkStatus(); drawBkBanner(); toast('Backup salvo. Guarde o arquivo fora do aparelho (iCloud Drive, por exemplo).');
+    } catch(e) { if (!(e && e.code === 'declined')) toast('Não consegui salvar o arquivo.'); }
+    return;
+  }
+  try {
+    progress('Reunindo seus dados', 'Backup');
+    await loadScript(CDN.jszip);
+    clearTimeout(gameTimer); await Store.kvSet('game', A.game); await Store.kvSet('focus', F);
+    const zip = new window.JSZip(), files = [];
+    const [pkgs, notes, cards, media, states, kv, revlog, errors] = await Promise.all([Store.getAll('pkgs'), Store.getAll('notes'), Store.getAll('cards'), Store.getAll('media'), Store.allStates(), Store.allKv(), Store.getAll('revlog'), Store.getAll('errors')]);
+    const put = (name, v) => zip.file('data/' + name + '.json', JSON.stringify(v));
+    put('pkgs', bkEncode(pkgs, files)); put('notes', notes.map(n => { const o = Object.assign({}, n); delete o._norm; return o; })); put('cards', cards);
+    put('states', [...states.entries()]); put('kv', bkEncode(kv, files)); put('revlog', revlog); put('errors', bkEncode(errors, files));
+    const mlist = [];
+    media.forEach((m, i) => { if (!m.blob) return; const f = 'm/' + i; mlist.push({ key: m.key, pkg: m.pkg, local: !!m.local, type: m.blob.type, file: f }); zip.file(f, m.blob, { compression: 'STORE' }); });
+    put('media', mlist);
+    for (const [f, b] of files) zip.file(f, b, { compression: 'STORE' });
+    const info = gameInfo();
+    zip.file('manifest.json', JSON.stringify({ app: 'fichario', v: 1, at: Date.now(), decks: pkgs.map(p => p.name), cards: cards.length, notes: notes.length, media: mlist.length, level: info.level, xp: info.xp }));
+    progress('Compactando', 'Backup');
+    BK.blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    const d = new Date();
+    BK.name = 'Fichario-backup-' + d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0') + '.zip';
+    progressHide(); bkStatus();
+  } catch(e) { progressError('Não consegui montar o backup. ' + ((e && e.message) || '')); }
+}
+async function readBackup(file){
+  try {
+    progress('Lendo o backup', 'Restaurar');
+    await loadScript(CDN.jszip);
+    const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
+    const mf = zip.file('manifest.json');
+    const man = mf ? JSON.parse(await mf.async('string')) : null;
+    if (!man || man.app !== 'fichario') throw new Error('Este arquivo não é um backup do Fichário. Para decks do Anki, use Importar (.apkg).');
+    BK.pending = { zip, man };
+    progressHide();
+    $('bkRestoreBox').hidden = false;
+    $('bkRestoreText').textContent = 'Backup de ' + new Date(man.at).toLocaleDateString('pt-BR') + ': ' + man.cards.toLocaleString('pt-BR') + ' cards em ' + man.decks.length + (man.decks.length === 1 ? ' deck' : ' decks') + (man.decks.length ? ' (' + man.decks.slice(0, 4).join(', ') + ')' : '') + ', nível ' + man.level + '. Restaurar apaga tudo o que está neste aparelho agora (' + A.cards.size.toLocaleString('pt-BR') + ' cards) e coloca o backup no lugar.';
+    $('bkRestoreBox').scrollIntoView({ block: 'center' });
+  } catch(e) { progressError((e && e.message) || 'Não consegui ler este arquivo.'); }
+}
+async function applyBackup(){
+  const b = BK.pending; if (!b) return;
+  try {
+    progress('Restaurando', 'Restaurar');
+    const zip = b.zip, get = async n => { const f = zip.file('data/' + n + '.json'); return f ? JSON.parse(await f.async('string')) : []; };
+    // read everything first, so a damaged file fails before anything is erased
+    const pkgs = await bkDecode(await get('pkgs'), zip), notes = await get('notes'), cards = await get('cards'), states = await get('states');
+    const kv = await bkDecode(await get('kv'), zip), revlog = await get('revlog'), errors = await bkDecode(await get('errors'), zip);
+    const media = [];
+    for (const m of await get('media')) { const f = zip.file(m.file); if (!f) continue; const rec = { key: m.key, pkg: m.pkg, blob: new Blob([await f.async('uint8array')], { type: m.type || '' }) }; if (m.local) rec.local = true; media.push(rec); }
+    if (!Array.isArray(pkgs) || !Array.isArray(cards)) throw new Error('O backup está incompleto.');
+    clearTimeout(gameTimer);
+    await Store.clearAll();
+    await Store.putMany('pkgs', pkgs); await Store.putMany('notes', notes); await Store.putMany('cards', cards);
+    await Store.putMany('media', media); await Store.putStates(states); await Store.putMany('revlog', revlog); await Store.putMany('errors', errors);
+    for (const k in kv) await Store.kvSet(k, kv[k]);
+    location.reload();
+  } catch(e) { progressError('Não consegui restaurar. Nada foi apagado se o erro apareceu antes de “Restaurando”. ' + ((e && e.message) || '')); }
+}
+$('bkBtn').addEventListener('click', makeBackup);
+$('bkRestoreBtn').addEventListener('click', () => { $('bkFile').value = ''; $('bkFile').click(); });
+$('bkFile').addEventListener('change', () => { const f = $('bkFile').files[0]; if (f) readBackup(f); });
+$('bkRestoreGo').addEventListener('click', applyBackup);
+$('bkRestoreCancel').addEventListener('click', () => { BK.pending = null; $('bkRestoreBox').hidden = true; });
+$('bkBanner').addEventListener('click', () => go('settings'));
 
 // ---------- deck ----------
 function deckTree(pkg){
@@ -3014,6 +3131,7 @@ RENDER.settings = function(){
   $('ret').value = Math.round(A.prefs.retention * 100);
   $('retOut').textContent = Math.round(A.prefs.retention * 100) + '%';
   $('newPer').value = A.prefs.newPerDay;
+  bkStatus(); $('bkRestoreBox').hidden = !BK.pending;
   $('goalSel').innerHTML = GOALS.map(n => '<option value="' + n + '"' + (n === dailyGoal() ? ' selected' : '') + '>' + n.toLocaleString('pt-BR') + ' XP</option>').join('');
   $('colorMeanings').innerHTML = COLORS.map(([c, n]) => '<div class="cmrow"><i style="background:' + c + '"></i><input class="inp" data-cm="' + c + '" value="' + esc(colorMeaning(c)) + '" aria-label="Significado da cor ' + n + '" autocomplete="off"></div>').join('');
   setStatus(R.status);
@@ -3069,6 +3187,7 @@ window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').addEventL
     }
   } catch(e) {}
   try { const g = await Store.kvGet('game'); A.game = g && typeof g.xp === 'number' ? { xp: g.xp, days: g.days || {}, goal: g.goal || 0 } : { xp: 0, days: {} }; } catch(e) { A.game = { xp: 0, days: {} }; }
+  try { const b = await Store.kvGet('backup'); if (b && b.at) BK.at = b.at; } catch(e) {}
   try { const f = await Store.kvGet('focus'); if (f && typeof f === 'object') Object.assign(F, f, { tasks: Array.isArray(f.tasks) ? f.tasks : [] }); } catch(e) {}
   go('home', {}, { reset:true });
   loadScript(CDN.fsrs).then(makeFsrs).catch(()=>{});

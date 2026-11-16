@@ -8,6 +8,11 @@ Flashcards com repetição espaçada (FSRS) para a prova de residência médica.
 - **Cria e edita cards** (frente/verso e lacunas), com cores por significado, tags e subbaralhos.
 - **Exporta `.apkg`** do deck inteiro, com ou sem o progresso. O arquivo abre no Anki do computador, no AnkiMobile e no próprio Fichário de outro aparelho.
 - **Caderno de erros**: questão errada, motivo do erro e catálogo de método.
+- **Múltipla escolha**: cole a questão inteira e o app separa enunciado, alternativas, gabarito e comentário.
+- **Jogo**: XP por resposta, níveis sem teto, sequência de dias e meta diária.
+- **Heatmap** das revisões do último ano.
+- **Foco**: Pomodoro com durações ajustáveis e lista de tarefas.
+- **Backup completo** em um arquivo (Ajustes › Cópia de segurança), com restauração em qualquer aparelho.
 - **Estatísticas** por grande área e por tema.
 - **Funciona sem internet** depois da primeira abertura.
 
@@ -18,7 +23,8 @@ Tudo fica guardado no próprio aparelho (no navegador). Nada é enviado para o G
 Consequências práticas:
 
 - iPhone e Mac não se sincronizam sozinhos. Para levar um deck de um para o outro: abra o deck, **Preparar arquivo .apkg** com "Incluir meu progresso" marcado, e importe o arquivo no outro aparelho.
-- Esse mesmo arquivo é a sua cópia de segurança. Se o navegador limpar os dados do site, só volta o que estiver em um `.apkg` exportado.
+- Para levar **tudo** (todos os decks, XP, tarefas, caderno de erros): Ajustes › Cópia de segurança › Fazer backup agora, e Restaurar no outro aparelho.
+- Se o navegador limpar os dados do site, só volta o que estiver num backup. O app avisa na tela inicial quando o último backup tem mais de 7 dias.
 - "Gerar card com o Claude" só aparece quando o app é aberto dentro do Claude. Aqui, os cards são escritos à mão ou importados.
 
 ## Publicar no GitHub Pages
