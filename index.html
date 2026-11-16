@@ -36,6 +36,7 @@
 
 <main>
   <section class="view wrap" id="home">
+    <div class="gamehero"></div>
     <div id="homeList"></div>
     <p class="sectionlabel">Caderno de erros</p>
     <ul class="decks acts"><li><button class="deckrow act" id="wrongBtnHome"><span class="ic" style="background:#FF3B30"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5"/><path d="M12 16.5v.01"/><path d="M10.3 3.9L2.6 17.3A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.7L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span><span class="nm"><b>Card de questão errada</b></span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button></li><li><button class="deckrow act" id="errorsBtnHome"><span class="ic" style="background:#FF9500"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 5.5v16"/></svg></span><span class="nm"><b>Caderno de erros</b></span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button></li></ul>
@@ -45,6 +46,7 @@
   </section>
 
   <section class="view wrap" id="empty" hidden>
+    <div class="gamehero"></div>
     <div class="empty">
       <div class="paper">
         <div class="head">Comece por aqui</div>
@@ -224,6 +226,7 @@
 
   <section class="view wrap" id="study" hidden>
     <div class="studyhead" id="studyHead"></div>
+    <div class="xpstrip" id="xpStrip"></div>
     <div class="fcard" id="fcard">
       <div class="head"><span id="cardDeck"></span><span id="cardState"></span></div>
       <div id="cardhost" role="button" tabindex="0" aria-label="Cartão. Toque para ver a resposta."></div>

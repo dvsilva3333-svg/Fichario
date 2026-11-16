@@ -918,6 +918,7 @@ $('ovClose').addEventListener('click', progressHide);
 
 // ---------- home ----------
 RENDER.home = function(){
+  drawGame();
   if (!A.pkgs.size) { show('empty'); return; }
   show('home');
   const pk = [...A.pkgs.values()].sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
@@ -925,7 +926,7 @@ RENDER.home = function(){
   for (const p of pk) {
     const k = countsFor(pkgCards(p.id), p.id);
     const pend = p.pending ? ', ' + p.pending + ' para levar ao Anki' : '';
-    html += '<li><button class="deckrow" data-pkg="' + esc(p.id) + '"><span class="nm"><b>' + esc(p.name) + '</b><span>' + p.count + ' cards' + pend + '</span></span><span class="counts">' + countsHtml(k) + '</span></button></li>';
+    html += '<li><button class="deckrow" data-pkg="' + esc(p.id) + '"><span class="tile-ic" style="--h:' + (hashStr(p.name) % 360) + '">' + esc((p.name.trim()[0] || '?').toUpperCase()) + '</span><span class="nm"><b>' + esc(p.name) + '</b><span>' + p.count + ' cards' + pend + '</span></span><span class="counts">' + countsHtml(k) + '</span></button></li>';
   }
   $('homeList').innerHTML = html + '</ul>';
   setStatus(R.status);
@@ -933,6 +934,71 @@ RENDER.home = function(){
 RENDER.empty = RENDER.home;
 $('homeList').addEventListener('click', e => { const b = e.target.closest('[data-pkg]'); if (b) go('deck', { pkg: b.dataset.pkg }); });
 $('wrongBtnHome').addEventListener('click', () => go('wrong', { pkg: [...A.pkgs.keys()][0], fresh:true }));
+
+// ---------- jogo: XP, níveis e sequência de dias ----------
+// Cada resposta vale XP; o total define o nível. Fica guardado no aparelho (kv 'game').
+const XP_GRADE = [0, 3, 7, 10, 12];           // errei, difícil, bom, fácil
+const XP_NEW = 5, XP_CRAM = 2, XP_CREATE = 5, DAILY_GOAL = 150;
+const RANKS = [[1,'Calouro'],[3,'Acadêmico'],[5,'Interno'],[8,'Formando'],[11,'R1'],[15,'R2'],[20,'R3'],[26,'Preceptor'],[33,'Chefe de plantão'],[40,'Professor titular']];
+const lvlStart = L => 50 * L * (L - 1);      // XP total em que o nível L começa (cada nível pede 100 XP a mais que o anterior)
+function levelOf(xp){ let L = Math.max(1, Math.floor((1 + Math.sqrt(1 + 0.08 * xp)) / 2)); while (lvlStart(L + 1) <= xp) L++; while (L > 1 && lvlStart(L) > xp) L--; return L; }
+const rankOf = L => { let r = RANKS[0][1]; for (const [n, name] of RANKS) if (L >= n) r = name; return r; };
+function gameInfo(){
+  const g = A.game, now = Date.now();
+  const level = levelOf(g.xp), base = lvlStart(level), need = lvlStart(level + 1) - base, into = g.xp - base;
+  const today = g.days[C.dayKeyOf(now)] || 0;
+  let streak = 0;
+  for (let i = today > 0 ? 0 : 1; i < 3650; i++) { if ((g.days[C.dayKeyOf(now - i * DAY)] || 0) > 0) streak++; else break; }
+  return { xp: g.xp, level, rank: rankOf(level), into, need, pct: Math.round(into / need * 100), today, streak, goalPct: Math.min(100, Math.round(today / DAILY_GOAL * 100)) };
+}
+const FLAME = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2c1 3.2 4.8 5 4.8 9.6 0 1-.3 1.9-.7 2.6.9-.4 1.6-1.3 1.9-2.4 1 1.300 1.500 2.800 1.500 4.200A7.500 7.500 0 0 1 4.500 16c0-3 1.700-5 3.200-6.800.2 1.500.9 2.600 1.900 3.200C9.200 8.600 10.300 5 12 2z"/></svg>';
+function drawGame(){
+  if (!A.game) return;
+  const i = gameInfo();
+  const hero = '<div class="hero" role="group" aria-label="Seu progresso no jogo">' +
+    '<div class="ring" style="--p:' + i.pct + '"><b>' + i.level + '</b><small>nível</small></div>' +
+    '<div class="hinfo"><div class="rank">' + esc(i.rank) + '</div>' +
+      '<div class="xpbar" role="progressbar" aria-valuemin="0" aria-valuemax="' + i.need + '" aria-valuenow="' + i.into + '"><i style="width:' + i.pct + '%"></i></div>' +
+      '<div class="xpnum">' + i.into + ' / ' + i.need + ' XP · faltam ' + (i.need - i.into) + ' para o nível ' + (i.level + 1) + '</div></div>' +
+    '<div class="chips"><span class="chip' + (i.streak ? ' fire' : '') + '">' + FLAME + (i.streak ? i.streak + (i.streak === 1 ? ' dia seguido' : ' dias seguidos') : 'Comece sua sequência hoje') + '</span>' +
+      '<span class="chip goal' + (i.goalPct >= 100 ? ' hit' : '') + '"><span class="gbar"><i style="width:' + i.goalPct + '%"></i></span>' + (i.goalPct >= 100 ? 'Meta do dia batida · ' + i.today + ' XP' : 'Hoje ' + i.today + ' / ' + DAILY_GOAL + ' XP') + '</span></div></div>';
+  for (const el of document.querySelectorAll('.gamehero')) el.innerHTML = hero;
+  const strip = $('xpStrip');
+  if (strip) strip.innerHTML = '<span class="lv">Nv ' + i.level + '</span><span class="xpbar"><i style="width:' + i.pct + '%"></i></span><span class="tx">' + i.today + ' XP hoje</span>';
+}
+let gameTimer = null;
+function addXp(n){
+  if (!n || !A.game) return;
+  const g = A.game, before = levelOf(g.xp), key = C.dayKeyOf(Date.now());
+  const hadGoal = (g.days[key] || 0) >= DAILY_GOAL;
+  g.xp = Math.max(0, g.xp + n);
+  g.days[key] = Math.max(0, (g.days[key] || 0) + n);
+  if (typeof S !== 'undefined' && S) S.xpGain = Math.max(0, (S.xpGain || 0) + n);
+  clearTimeout(gameTimer); gameTimer = setTimeout(() => Store.kvSet('game', g).catch(()=>{}), 250);
+  drawGame();
+  if (n > 0) {
+    xpPop('+' + n + ' XP');
+    const after = levelOf(g.xp);
+    if (after > before) levelUp(after);
+    else if (!hadGoal && g.days[key] >= DAILY_GOAL) toast('Meta do dia batida: ' + DAILY_GOAL + ' XP.');
+  }
+}
+function xpPop(text){
+  const host = $('xpStrip'); if (!host || !host.offsetParent) return;
+  const el = document.createElement('span'); el.className = 'xppop'; el.textContent = text; el.setAttribute('aria-hidden', 'true');
+  host.appendChild(el); setTimeout(() => el.remove(), 900);
+}
+function levelUp(level){
+  const old = document.getElementById('lvlUp'); if (old) old.remove();
+  const box = document.createElement('div'); box.id = 'lvlUp'; box.setAttribute('role', 'status');
+  const colors = ['#FFC53D', '#FF6B6B', '#5EEAD4', '#A78BFA', '#60A5FA', '#F9A8D4'];
+  let conf = '';
+  for (let k = 0; k < 28; k++) conf += '<i style="left:' + (4 + (k * 37) % 92) + '%;background:' + colors[k % colors.length] + ';animation-delay:' + ((k * 53) % 400) + 'ms;--r:' + ((k * 71) % 360) + 'deg"></i>';
+  box.innerHTML = '<div class="conf" aria-hidden="true">' + conf + '</div><div class="lvcard"><small>Subiu de nível</small><b>' + level + '</b><span>' + esc(rankOf(level)) + '</span></div>';
+  document.body.appendChild(box);
+  const close = () => box.remove();
+  box.addEventListener('click', close); setTimeout(close, 2600);
+}
 
 // ---------- deck ----------
 function deckTree(pkg){
@@ -1184,7 +1250,7 @@ RENDER.study = function(params){
     if (S.card) showSpecific(S.card, true); else nextCard();
     return;
   }
-  Object.assign(S, { mode: params.cram ? 'cram' : 'normal', pkg: p.id, path: params.path || null, tag: params.tag || null, undo: [], revSinceNew: 0, lastId: null, reviewed: 0, misses: {}, cramOk: 0, cramSeen: 0, doneShown: false, card: null });
+  Object.assign(S, { mode: params.cram ? 'cram' : 'normal', pkg: p.id, path: params.path || null, tag: params.tag || null, undo: [], revSinceNew: 0, lastId: null, reviewed: 0, xpGain: 0, misses: {}, cramOk: 0, cramSeen: 0, doneShown: false, card: null });
   S.cards = pkgCards(p.id).filter(c => !c.susp && inPath(c, p, S.path) && (!S.tag || hasTag(c, S.tag)));
   if (S.mode === 'cram') { S.queue = S.cards.slice(); for (let i = S.queue.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [S.queue[i], S.queue[j]] = [S.queue[j], S.queue[i]]; } }
   show('study', title, true);
@@ -1303,6 +1369,7 @@ function answer(g){
   if (S.mode === 'cram') {
     S.undo.push({ queue: S.queue.slice(), misses: Object.assign({}, S.misses), ok: S.cramOk, seen: S.cramSeen });
     const c = S.queue.shift(); S.cramSeen++;
+    const cx = g > 1 ? XP_CRAM : 0; S.undo[S.undo.length - 1].xp = cx; addXp(cx);
     if (g > 1) S.cramOk++;
     else if ((S.misses[c.id] || 0) < 2) { S.misses[c.id] = (S.misses[c.id] || 0) + 1; S.queue.splice(Math.min(S.queue.length, 4), 0, c); }
     $('undoBtn').disabled = false;
@@ -1321,7 +1388,9 @@ function answer(g){
     lastIvl: !prev || prev.st === 0 ? 0 : prev.st === 2 ? Math.max(1, prev.sd || 1) : -600,
     factor: Math.round(st.f * 100), time: Math.min(60000, Math.max(0, now - (S.shownAt || now))),
     type: !prev || prev.st === 0 || prev.st === 1 ? 0 : prev.st === 2 ? 1 : 2 }]).catch(()=>{});
-  S.undo.push({ id: S.card.id, prev, wasNew, g, revId });
+  const gx = XP_GRADE[g] + (wasNew ? XP_NEW : 0);
+  S.undo.push({ id: S.card.id, prev, wasNew, g, revId, xp: gx });
+  addXp(gx);
   if (S.undo.length > 30) S.undo.shift();
   $('undoBtn').disabled = false;
   setState(S.card.id, st);
@@ -1330,6 +1399,7 @@ function answer(g){
 }
 function undo(){
   const u = S.undo.pop(); if (!u) return;
+  if (u.xp) addXp(-u.xp);
   $('undoBtn').disabled = !S.undo.length;
   if (S.mode === 'cram') { S.queue = u.queue; S.misses = u.misses; S.cramOk = u.ok; S.cramSeen = u.seen; S.side = 'q'; nextCard(); toast('Resposta desfeita.'); return; }
   if (u.prev) setState(u.id, u.prev); else clearState(u.id);
@@ -1363,7 +1433,7 @@ function showDone(waitUntil){
     if (S.cramSeen) html += '<p>Você acertou ' + S.cramOk + ' de ' + S.cramSeen + ' respostas. A agenda dos cards não mudou.</p>';
   } else {
     html = '<h2>' + (waitUntil ? 'Pausa curta' : 'Por hoje é só') + '</h2>';
-    if (S.reviewed) html += '<p>Você respondeu ' + S.reviewed + (S.reviewed === 1 ? ' card' : ' cards') + ' nesta sessão.</p>';
+    if (S.reviewed) html += '<p>Você respondeu ' + S.reviewed + (S.reviewed === 1 ? ' card' : ' cards') + ' nesta sessão' + (S.xpGain ? ' e ganhou <b class="xpgain">+' + S.xpGain + ' XP</b>' : '') + '.</p>';
     if (waitUntil) {
       const t = new Date(waitUntil).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
       html += '<p>Ainda há cards em aprendizagem. O próximo volta às ' + t + '. Pode deixar esta tela aberta.</p>';
@@ -1577,6 +1647,7 @@ async function saveNewNote(pkg, v, image){
   await Store.putMany('pkgs', [p]);
   A.noteCache.delete(pkg); mediaCache.delete(pkg + '/' + (image && image.name));
   markNote(note);
+  addXp(XP_CREATE);
   return { cards: cards.map(c => c.id), did: v.did, mid: v.mid, tags: v.tags };
 }
 async function saveEdit(pkg, note, v){
@@ -2757,6 +2828,7 @@ window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').addEventL
       }
     }
   } catch(e) {}
+  try { const g = await Store.kvGet('game'); A.game = g && typeof g.xp === 'number' ? { xp: g.xp, days: g.days || {} } : { xp: 0, days: {} }; } catch(e) { A.game = { xp: 0, days: {} }; }
   go('home', {}, { reset:true });
   loadScript(CDN.fsrs).then(makeFsrs).catch(()=>{});
   initRemote();
