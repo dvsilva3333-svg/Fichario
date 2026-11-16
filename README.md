@@ -5,6 +5,7 @@ Flashcards com repetição espaçada (FSRS) para a prova de residência médica.
 ## O que faz
 
 - **Importa `.apkg` e `.colpkg`** do Anki (formato antigo e atual), com pastas, tags, imagens, áudios e o progresso de revisão.
+- **Importa decks em `.zip` com XML** (exportação do AnkiApp), com as imagens.
 - **Cria e edita cards** (frente/verso e lacunas), com cores por significado, tags e subbaralhos.
 - **Exporta `.apkg`** do deck inteiro, com ou sem o progresso. O arquivo abre no Anki do computador, no AnkiMobile e no próprio Fichário de outro aparelho.
 - **Caderno de erros**: questão errada, motivo do erro e catálogo de método.

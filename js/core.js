@@ -38,6 +38,68 @@
 
   // ---------- .apkg parsing ----------
   // libs: { JSZip, fzstd, SQL }
+  // ---------- deck em XML (exportação .zip do AnkiApp) ----------
+  // O zip traz um .xml com <deck><fields>…<cards>…, uma pasta blobs/ com as imagens e um media.json com o tipo de cada uma.
+  const xmlText = s => String(s || '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(Number(n))).replace(/&#x([0-9a-f]+);/gi, (m, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&amp;/g, '&');
+  const xmlAttr = (tag, name) => { const m = tag.match(new RegExp('\\b' + name + '="([^"]*)"')); return m ? xmlText(m[1]) : ''; };
+  const MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp', 'image/svg+xml': 'svg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'audio/wav': 'wav' };
+  async function parseXmlDeck(zip, xmlName, onProgress) {
+    const prog = onProgress || (() => {});
+    prog('Lendo os cards');
+    const xml = await zip.file(xmlName).async('string');
+    const head = xml.match(/<deck\b[^>]*>/);
+    if (!head) throw new Error('Não encontrei um deck dentro deste arquivo.');
+    const name = (xmlAttr(head[0], 'name').replace(/^[\s"'“”‘’«»]+|[\s"'“”‘’«»]+$/g, '') || xmlName.replace(/\.xml$/i, '')).trim() || 'Deck importado';
+    const fieldsBlock = (xml.match(/<fields>([\s\S]*?)<\/fields>/) || [, ''])[1];
+    const fields = [];
+    fieldsBlock.replace(/<([a-z-]+)\b([^>]*?)\/?>/gi, (m, kind, attrs) => { const n = xmlAttr(m, 'name'); if (n) fields.push({ name: n, kind: kind.toLowerCase(), sides: xmlAttr(m, 'sides') || '11' }); return m; });
+    if (!fields.length) throw new Error('Este arquivo não tem os campos dos cards.');
+    let mime = {};
+    if (zip.file('media.json')) { try { mime = JSON.parse(await zip.file('media.json').async('string')) || {}; } catch (e) { mime = {}; } }
+    const used = new Set();
+    const toHtml = (raw, kind) => {
+      let h = xmlText(raw).trim();
+      if (kind === 'text') h = h.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      h = h.replace(/\{\{blob\s+([0-9a-f]{16,})\}\}/gi, (m, id) => { used.add(id); const t = mime[id] || ''; return /^audio\//.test(t) ? '[sound:' + id + '.' + (MIME_EXT[t] || 'mp3') + ']' : '<img src="' + id + '.' + (MIME_EXT[t] || 'jpg') + '">'; });
+      h = h.replace(/\*\*([^*\n]+?)\*\*/g, '<b>$1</b>');
+      if (!/<(p|br|div|ul|ol|table|img)\b/i.test(h)) h = h.replace(/\n/g, '<br>');
+      return h;
+    };
+    const front = fields.filter(f => f.sides[0] === '1'), backOnly = fields.filter(f => f.sides[0] !== '1' && f.sides[1] === '1');
+    const mid = String(1450000000000 + fnv('xmlnt\x1f' + name + '\x1f' + fields.map(f => f.name + f.sides).join('|')));
+    const did = String(1350000000000 + fnv('xmldeck\x1f' + name));
+    const wrap = l => l.map(f => '<div class="campo">{{' + f.name + '}}</div>').join('\n');
+    const notetypes = {}; notetypes[mid] = { name, kind: 0, flds: fields.map(f => f.name),
+      css: '.card {\n  font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;\n  font-size: 20px;\n  line-height: 1.45;\n  text-align: left;\n  color: #1c1c1e;\n  background-color: #ffffff;\n}\n.card.nightMode, .card.night_mode { color: #f2f2f7; background-color: #1c1c1e; }\n.campo { margin: 0 0 10px; }\nimg { max-width: 100%; height: auto; border-radius: 8px; display: block; margin: 0 0 10px; }\n',
+      tmpls: [{ name: 'Cartão 1', q: wrap(front.length ? front : fields.slice(0, 1)), a: '{{FrontSide}}\n\n<hr id=answer>\n\n' + wrap(backOnly.length ? backOnly : fields.slice(1)) }] };
+    const decks = {}; decks[did] = [name];
+    const notes = [], cards = [], seen = new Set();
+    const cardRe = /<card\b[^>]*>([\s\S]*?)<\/card>/g;
+    let m, pos = 0;
+    while ((m = cardRe.exec(xml))) {
+      const vals = {};
+      m[1].replace(/<([a-z-]+)\b([^>]*)>([\s\S]*?)<\/\1>/gi, (all, kind, attrs, body) => { const n = xmlAttr('<x ' + attrs + '>', 'name'); if (n) vals[n] = toHtml(body, kind.toLowerCase()); return all; });
+      const flds = fields.map(f => vals[f.name] || '');
+      if (!flds.some(Boolean)) continue;
+      // o id sai do texto da frente: reimportar o mesmo arquivo atualiza o card em vez de duplicar
+      let key = fnv(name + '\x1f' + stripHtml(flds[0]));
+      while (seen.has(key)) key = (key + 1) >>> 0;
+      seen.add(key);
+      const nid = String(1400000000000 + key);
+      notes.push({ id: nid, guid: 'xa' + key.toString(36), mid, flds, tags: '' });
+      cards.push({ id: String(1410000000000 + key), nid, did, ord: 0, pos: ++pos, susp: false, sched: null });
+    }
+    if (!cards.length) throw new Error('Este arquivo não tem nenhum card.');
+    prog('Lendo as imagens');
+    const media = [];
+    for (const id of used) {
+      const f = zip.file('blobs/' + id); if (!f) continue;
+      const t = mime[id] || '';
+      media.push({ name: id + '.' + (MIME_EXT[t] || (/^audio\//.test(t) ? 'mp3' : 'jpg')), bytes: await f.async('uint8array') });
+    }
+    return { name, notetypes, decks, notes, cards, media, hist: {} };
+  }
+
   async function parseApkg(data, libs, onProgress) {
     const prog = onProgress || (() => {});
     const zip = await libs.JSZip.loadAsync(data);
@@ -51,7 +113,10 @@
     } else if (zip.file('collection.anki2')) {
       dbBytes = await zip.file('collection.anki2').async('uint8array');
     } else {
-      throw new Error('Este arquivo não parece ser um deck do Anki (.apkg ou .colpkg).');
+      const xmlName = Object.keys(zip.files).find(n => /\.xml$/i.test(n) && !zip.files[n].dir && n.indexOf('/') < 0);
+      if (xmlName) return parseXmlDeck(zip, xmlName, prog);
+      if (zip.file('manifest.json') && zip.file('data/cards.json')) throw new Error('Este arquivo é um backup do Fichário. Use “Restaurar de um backup”, na tela inicial.');
+      throw new Error('Não reconheci este arquivo. O Fichário abre decks do Anki (.apkg, .colpkg) e decks em .zip com XML (AnkiApp).');
     }
     const db = new libs.SQL.Database(dbBytes);
     try {
