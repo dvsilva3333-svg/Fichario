@@ -1354,12 +1354,11 @@ async function applyBackup(){
   } catch(e) { progressError('Não consegui restaurar. Nada foi apagado se o erro apareceu antes de “Restaurando”. ' + ((e && e.message) || '')); }
 }
 $('bkBtn').addEventListener('click', makeBackup);
-$('bkRestoreBtn').addEventListener('click', () => { $('bkFile').value = ''; $('bkFile').click(); });
 $('bkFile').addEventListener('change', () => { const f = $('bkFile').files[0]; if (f) readBackup(f); });
 $('bkRestoreGo').addEventListener('click', applyBackup);
 $('bkRestoreCancel').addEventListener('click', () => { BK.pending = null; $('bkRestoreBox').hidden = true; });
 $('bkBtnHome').addEventListener('click', makeBackup);
-$('bkRestoreHome').addEventListener('click', () => { $('bkFile').value = ''; $('bkFile').click(); });
+
 
 // ---------- plano de estudo: carga de revisões e novos por dia ----------
 const PLAN = { exam: '', minutes: 30, maxRev: 0 };
@@ -2633,8 +2632,23 @@ const MIME = { png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/
   mp3:'audio/mpeg', m4a:'audio/mp4', ogg:'audio/ogg', oga:'audio/ogg', wav:'audio/wav', opus:'audio/ogg', aac:'audio/aac', mp4:'video/mp4', webm:'video/webm' };
 const mimeOf = n => MIME[(String(n).split('.').pop() || '').toLowerCase()] || 'application/octet-stream';
 let sqlPromise = null;
-function pickFile(){ $('file').value = ''; $('file').click(); }
-for (const id of ['importBtn','importBtn2','reimportBtn']) $(id).addEventListener('click', pickFile);
+// Abrir a janela de escolha de arquivo sem depender de um clique feito por código: alguns
+// navegadores (o app instalado pelo Safari no Mac, por exemplo) ignoram esse clique. Um campo de
+// arquivo de verdade, transparente, fica por cima do botão; quem recebe o clique é ele.
+function overlayPicker(btn, accept, label, onFile){
+  const wrap = document.createElement('span'); wrap.className = 'pickwrap';
+  btn.parentNode.insertBefore(wrap, btn); wrap.appendChild(btn);
+  const inp = document.createElement('input'); inp.type = 'file'; inp.className = 'pickover'; if (accept) inp.accept = accept;
+  inp.setAttribute('aria-label', label); inp.title = '';
+  btn.tabIndex = -1; btn.setAttribute('aria-hidden', 'true');
+  inp.addEventListener('change', () => { const f = inp.files[0]; inp.value = ''; if (f) onFile(f); });
+  wrap.appendChild(inp);
+}
+overlayPicker($('importBtn'), '', 'Importar deck (.apkg ou .zip)', f => importFile(f));
+overlayPicker($('importBtn2'), '', 'Importar deck (.apkg ou .zip)', f => importFile(f));
+overlayPicker($('reimportBtn'), '', 'Importar de novo', f => importFile(f));
+overlayPicker($('bkRestoreHome'), '.zip,application/zip', 'Restaurar de um backup', f => readBackup(f));
+overlayPicker($('bkRestoreBtn'), '.zip,application/zip', 'Restaurar de um backup', f => readBackup(f));
 $('file').addEventListener('change', () => { const f = $('file').files[0]; if (f) importFile(f); });
 // No computador: arrastar o arquivo para a janela também importa (deck .apkg/.zip ou backup do Fichário).
 let dragDepth = 0;
