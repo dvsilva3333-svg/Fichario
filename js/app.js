@@ -942,10 +942,10 @@ const XP_NEW = 5, XP_CRAM = 2, XP_CREATE = 5, GOALS = [150, 300, 500, 1000, 2000
 const dailyGoal = () => (A.game && A.game.goal) || 500;
 // Os níveis não têm teto; os títulos são marcos espaçados para durar anos de uso.
 const RANKS = [[1,'Calouro'],[15,'Ciclo básico'],[50,'Ciclo clínico'],[120,'Interno'],[250,'Formando'],[400,'Médico'],[500,'R1'],[650,'R2'],[800,'R3'],[1000,'Preceptor'],[1300,'Chefe de serviço'],[1700,'Professor titular']];
-// XP total em que o nível L começa. O 1º nível pede 300 XP e cada um pede 25 a mais que o anterior:
-// 1 milhão de XP = nível 272, 3 milhões = nível 479, 10 milhões = nível 884.
-const lvlStart = L => 300 * (L - 1) + 12.5 * (L - 1) * (L - 2);
-function levelOf(xp){ let L = Math.max(1, 1 + Math.floor((-287.5 + Math.sqrt(287.5 * 287.5 + 50 * xp)) / 25)); while (lvlStart(L + 1) <= xp) L++; while (L > 1 && lvlStart(L) > xp) L--; return L; }
+// XP total em que o nível L começa. O 1º nível pede 150 XP e cada um pede 3 a mais que o anterior.
+// Calibrado para ~650 XP por dia (60 respostas): nível 500 em cerca de 1,9 ano, nível 1000 em cerca de 7 anos.
+const lvlStart = L => 150 * (L - 1) + 1.5 * (L - 1) * (L - 2);
+function levelOf(xp){ let L = Math.max(1, 1 + Math.floor((-148.5 + Math.sqrt(148.5 * 148.5 + 6 * xp)) / 3)); while (lvlStart(L + 1) <= xp) L++; while (L > 1 && lvlStart(L) > xp) L--; return L; }
 const rankOf = L => { let r = RANKS[0][1]; for (const [n, name] of RANKS) if (L >= n) r = name; return r; };
 const nextRank = L => RANKS.find(([n]) => n > L) || null;
 function gameInfo(){
