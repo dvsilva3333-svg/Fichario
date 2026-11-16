@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
-<link rel="stylesheet" href="css/fichario.css?v=20261116d">
+<link rel="stylesheet" href="css/fichario.css?v=20261116e">
 </head>
 <body>
 <header class="top">
@@ -362,7 +362,7 @@
       <button class="primary" id="bkBtn" style="margin-top:10px">Fazer backup agora</button>
       <p class="note" id="bkNote" aria-live="polite"></p>
       <button class="secondary" id="bkRestoreBtn" style="margin-top:10px">Restaurar de um backup</button>
-      <input type="file" id="bkFile" accept=".zip,application/zip" hidden>
+      <input type="file" id="bkFile" class="filepick" accept=".zip,application/zip" tabindex="-1" aria-hidden="true">
       <div class="bkrestore" id="bkRestoreBox" hidden>
         <p id="bkRestoreText"></p>
         <button class="danger" id="bkRestoreGo">Apagar o que está aqui e restaurar</button>
@@ -377,8 +377,9 @@
   </section>
 </main>
 
-<input type="file" id="file" hidden>
-<input type="file" id="imgFile" accept="image/*" hidden>
+<input type="file" id="file" class="filepick" tabindex="-1" aria-hidden="true">
+<input type="file" id="imgFile" class="filepick" accept="image/*" tabindex="-1" aria-hidden="true">
+<div id="dropHint" hidden>Solte o arquivo para importar</div>
 <div class="overlay" id="overlay" hidden>
   <div class="box" role="dialog" aria-modal="true" aria-labelledby="ovMsg">
     <div class="head" id="ovHead">Importando</div>
@@ -410,7 +411,7 @@
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="js/core.js?v=20261116d"></script>
-<script src="js/app.js?v=20261116d"></script>
+<script src="js/core.js?v=20261116e"></script>
+<script src="js/app.js?v=20261116e"></script>
 </body>
 </html>

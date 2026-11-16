@@ -2636,6 +2636,18 @@ let sqlPromise = null;
 function pickFile(){ $('file').value = ''; $('file').click(); }
 for (const id of ['importBtn','importBtn2','reimportBtn']) $(id).addEventListener('click', pickFile);
 $('file').addEventListener('change', () => { const f = $('file').files[0]; if (f) importFile(f); });
+// No computador: arrastar o arquivo para a janela também importa (deck .apkg/.zip ou backup do Fichário).
+let dragDepth = 0;
+const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
+window.addEventListener('dragenter', e => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; $('dropHint').hidden = false; });
+window.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener('dragleave', e => { if (!hasFiles(e)) return; dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $('dropHint').hidden = true; });
+window.addEventListener('drop', e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; $('dropHint').hidden = true;
+  const f = e.dataTransfer.files[0]; if (!f) return;
+  if (/^fichario-backup/i.test(f.name)) readBackup(f); else importFile(f);
+});
 async function importFile(file){
   try {
     progress('Preparando o leitor de decks');
