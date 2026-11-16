@@ -938,30 +938,35 @@ $('wrongBtnHome').addEventListener('click', () => go('wrong', { pkg: [...A.pkgs.
 // ---------- jogo: XP, níveis e sequência de dias ----------
 // Cada resposta vale XP; o total define o nível. Fica guardado no aparelho (kv 'game').
 const XP_GRADE = [0, 3, 7, 10, 12];           // errei, difícil, bom, fácil
-const XP_NEW = 5, XP_CRAM = 2, XP_CREATE = 5, DAILY_GOAL = 150;
-const RANKS = [[1,'Calouro'],[3,'Acadêmico'],[5,'Interno'],[8,'Formando'],[11,'R1'],[15,'R2'],[20,'R3'],[26,'Preceptor'],[33,'Chefe de plantão'],[40,'Professor titular']];
-const lvlStart = L => 50 * L * (L - 1);      // XP total em que o nível L começa (cada nível pede 100 XP a mais que o anterior)
-function levelOf(xp){ let L = Math.max(1, Math.floor((1 + Math.sqrt(1 + 0.08 * xp)) / 2)); while (lvlStart(L + 1) <= xp) L++; while (L > 1 && lvlStart(L) > xp) L--; return L; }
+const XP_NEW = 5, XP_CRAM = 2, XP_CREATE = 5, GOALS = [150, 300, 500, 1000, 2000, 3000];
+const dailyGoal = () => (A.game && A.game.goal) || 500;
+// Os níveis não têm teto; os títulos são marcos espaçados para durar anos de uso.
+const RANKS = [[1,'Calouro'],[15,'Ciclo básico'],[50,'Ciclo clínico'],[120,'Interno'],[250,'Formando'],[400,'Médico'],[500,'R1'],[650,'R2'],[800,'R3'],[1000,'Preceptor'],[1300,'Chefe de serviço'],[1700,'Professor titular']];
+// XP total em que o nível L começa. O 1º nível pede 300 XP e cada um pede 25 a mais que o anterior:
+// 1 milhão de XP = nível 272, 3 milhões = nível 479, 10 milhões = nível 884.
+const lvlStart = L => 300 * (L - 1) + 12.5 * (L - 1) * (L - 2);
+function levelOf(xp){ let L = Math.max(1, 1 + Math.floor((-287.5 + Math.sqrt(287.5 * 287.5 + 50 * xp)) / 25)); while (lvlStart(L + 1) <= xp) L++; while (L > 1 && lvlStart(L) > xp) L--; return L; }
 const rankOf = L => { let r = RANKS[0][1]; for (const [n, name] of RANKS) if (L >= n) r = name; return r; };
+const nextRank = L => RANKS.find(([n]) => n > L) || null;
 function gameInfo(){
   const g = A.game, now = Date.now();
   const level = levelOf(g.xp), base = lvlStart(level), need = lvlStart(level + 1) - base, into = g.xp - base;
   const today = g.days[C.dayKeyOf(now)] || 0;
   let streak = 0;
   for (let i = today > 0 ? 0 : 1; i < 3650; i++) { if ((g.days[C.dayKeyOf(now - i * DAY)] || 0) > 0) streak++; else break; }
-  return { xp: g.xp, level, rank: rankOf(level), into, need, pct: Math.round(into / need * 100), today, streak, goalPct: Math.min(100, Math.round(today / DAILY_GOAL * 100)) };
+  return { xp: g.xp, level, rank: rankOf(level), next: nextRank(level), into, need, pct: Math.floor(into / need * 100), today, streak, goal: dailyGoal(), goalPct: Math.min(100, Math.round(today / dailyGoal() * 100)) };
 }
 const FLAME = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2c1 3.2 4.8 5 4.8 9.6 0 1-.3 1.9-.7 2.6.9-.4 1.6-1.3 1.9-2.4 1 1.300 1.500 2.800 1.500 4.200A7.500 7.500 0 0 1 4.500 16c0-3 1.700-5 3.200-6.800.2 1.500.9 2.600 1.900 3.200C9.200 8.600 10.300 5 12 2z"/></svg>';
 function drawGame(){
   if (!A.game) return;
   const i = gameInfo();
   const hero = '<div class="hero" role="group" aria-label="Seu progresso no jogo">' +
-    '<div class="ring" style="--p:' + i.pct + '"><b>' + i.level + '</b><small>nível</small></div>' +
-    '<div class="hinfo"><div class="rank">' + esc(i.rank) + '</div>' +
+    '<div class="ring' + (i.level > 999 ? ' big4' : i.level > 99 ? ' big' : '') + '" style="--p:' + i.pct + '"><b>' + i.level + '</b><small>nível</small></div>' +
+    '<div class="hinfo"><div class="rank">Nível ' + i.level.toLocaleString('pt-BR') + '</div><div class="title">' + esc(i.rank) + (i.next ? ' · ' + esc(i.next[1]) + ' no nível ' + i.next[0] : '') + '</div>' +
       '<div class="xpbar" role="progressbar" aria-valuemin="0" aria-valuemax="' + i.need + '" aria-valuenow="' + i.into + '"><i style="width:' + i.pct + '%"></i></div>' +
-      '<div class="xpnum">' + i.into + ' / ' + i.need + ' XP · faltam ' + (i.need - i.into) + ' para o nível ' + (i.level + 1) + '</div></div>' +
+      '<div class="xpnum">' + Math.floor(i.into).toLocaleString('pt-BR') + ' / ' + i.need.toLocaleString('pt-BR') + ' XP · total ' + i.xp.toLocaleString('pt-BR') + '</div></div>' +
     '<div class="chips"><span class="chip' + (i.streak ? ' fire' : '') + '">' + FLAME + (i.streak ? i.streak + (i.streak === 1 ? ' dia seguido' : ' dias seguidos') : 'Comece sua sequência hoje') + '</span>' +
-      '<span class="chip goal' + (i.goalPct >= 100 ? ' hit' : '') + '"><span class="gbar"><i style="width:' + i.goalPct + '%"></i></span>' + (i.goalPct >= 100 ? 'Meta do dia batida · ' + i.today + ' XP' : 'Hoje ' + i.today + ' / ' + DAILY_GOAL + ' XP') + '</span></div></div>';
+      '<span class="chip goal' + (i.goalPct >= 100 ? ' hit' : '') + '"><span class="gbar"><i style="width:' + i.goalPct + '%"></i></span>' + (i.goalPct >= 100 ? 'Meta do dia batida · ' + i.today.toLocaleString('pt-BR') + ' XP' : 'Hoje ' + i.today.toLocaleString('pt-BR') + ' / ' + i.goal.toLocaleString('pt-BR') + ' XP') + '</span></div></div>';
   for (const el of document.querySelectorAll('.gamehero')) el.innerHTML = hero;
   const strip = $('xpStrip');
   if (strip) strip.innerHTML = '<span class="lv">Nv ' + i.level + '</span><span class="xpbar"><i style="width:' + i.pct + '%"></i></span><span class="tx">' + i.today + ' XP hoje</span>';
@@ -970,7 +975,7 @@ let gameTimer = null;
 function addXp(n){
   if (!n || !A.game) return;
   const g = A.game, before = levelOf(g.xp), key = C.dayKeyOf(Date.now());
-  const hadGoal = (g.days[key] || 0) >= DAILY_GOAL;
+  const hadGoal = (g.days[key] || 0) >= dailyGoal();
   g.xp = Math.max(0, g.xp + n);
   g.days[key] = Math.max(0, (g.days[key] || 0) + n);
   if (typeof S !== 'undefined' && S) S.xpGain = Math.max(0, (S.xpGain || 0) + n);
@@ -980,7 +985,7 @@ function addXp(n){
     xpPop('+' + n + ' XP');
     const after = levelOf(g.xp);
     if (after > before) levelUp(after);
-    else if (!hadGoal && g.days[key] >= DAILY_GOAL) toast('Meta do dia batida: ' + DAILY_GOAL + ' XP.');
+    else if (!hadGoal && g.days[key] >= dailyGoal()) toast('Meta do dia batida: ' + dailyGoal().toLocaleString('pt-BR') + ' XP.');
   }
 }
 function xpPop(text){
@@ -994,11 +999,13 @@ function levelUp(level){
   const colors = ['#FFC53D', '#FF6B6B', '#5EEAD4', '#A78BFA', '#60A5FA', '#F9A8D4'];
   let conf = '';
   for (let k = 0; k < 28; k++) conf += '<i style="left:' + (4 + (k * 37) % 92) + '%;background:' + colors[k % colors.length] + ';animation-delay:' + ((k * 53) % 400) + 'ms;--r:' + ((k * 71) % 360) + 'deg"></i>';
-  box.innerHTML = '<div class="conf" aria-hidden="true">' + conf + '</div><div class="lvcard"><small>Subiu de nível</small><b>' + level + '</b><span>' + esc(rankOf(level)) + '</span></div>';
+  box.innerHTML = '<div class="conf" aria-hidden="true">' + conf + '</div><div class="lvcard"><small>' + (RANKS.some(([n]) => n === level) ? 'Novo título' : 'Subiu de nível') + '</small><b>' + level + '</b><span>' + esc(rankOf(level)) + '</span></div>';
   document.body.appendChild(box);
   const close = () => box.remove();
   box.addEventListener('click', close); setTimeout(close, 2600);
 }
+
+$('goalSel').addEventListener('change', e => { A.game.goal = Number(e.target.value) || 500; Store.kvSet('game', A.game).catch(()=>{}); drawGame(); });
 
 // ---------- deck ----------
 function deckTree(pkg){
@@ -2775,6 +2782,7 @@ RENDER.settings = function(){
   $('ret').value = Math.round(A.prefs.retention * 100);
   $('retOut').textContent = Math.round(A.prefs.retention * 100) + '%';
   $('newPer').value = A.prefs.newPerDay;
+  $('goalSel').innerHTML = GOALS.map(n => '<option value="' + n + '"' + (n === dailyGoal() ? ' selected' : '') + '>' + n.toLocaleString('pt-BR') + ' XP</option>').join('');
   $('colorMeanings').innerHTML = COLORS.map(([c, n]) => '<div class="cmrow"><i style="background:' + c + '"></i><input class="inp" data-cm="' + c + '" value="' + esc(colorMeaning(c)) + '" aria-label="Significado da cor ' + n + '" autocomplete="off"></div>').join('');
   setStatus(R.status);
 };
@@ -2828,7 +2836,7 @@ window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').addEventL
       }
     }
   } catch(e) {}
-  try { const g = await Store.kvGet('game'); A.game = g && typeof g.xp === 'number' ? { xp: g.xp, days: g.days || {} } : { xp: 0, days: {} }; } catch(e) { A.game = { xp: 0, days: {} }; }
+  try { const g = await Store.kvGet('game'); A.game = g && typeof g.xp === 'number' ? { xp: g.xp, days: g.days || {}, goal: g.goal || 0 } : { xp: 0, days: {} }; } catch(e) { A.game = { xp: 0, days: {} }; }
   go('home', {}, { reset:true });
   loadScript(CDN.fsrs).then(makeFsrs).catch(()=>{});
   initRemote();

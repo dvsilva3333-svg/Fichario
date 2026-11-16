@@ -425,3 +425,7 @@ select.inp{-webkit-appearance:none;appearance:none;padding-right:34px;background
 @keyframes lvpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
 @keyframes lvfade{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion: reduce){.xppop,.lvcard,#lvlUp,.conf i{animation:none}.conf{display:none}.xpbar i{transition:none}}
+
+.hinfo .title{font-size:14px;font-weight:600;opacity:.92;margin-top:2px}
+.ring.big b{font-size:22px}
+.ring.big4 b{font-size:18px}
