@@ -134,9 +134,9 @@ const Store = (function(){
     await Promise.all(['notes','cards','media','revlog'].map(s => wipe(t, s, pkg, false)));
     return done(t);
   }
-  async function importPkg(pkg, notes, cards, media){
+  async function importPkg(pkg, notes, cards, media, merge){
     if (mem) {
-      for (const s of ['notes','cards','media']) for (const [k,v] of mem[s]) if (v.pkg === pkg.id && !v.local) mem[s].delete(k);
+      if (!merge) for (const s of ['notes','cards','media']) for (const [k,v] of mem[s]) if (v.pkg === pkg.id && !v.local) mem[s].delete(k);
       mem.pkgs.set(pkg.id, pkg);
       for (const n of notes) mem.notes.set(n.id, n);
       for (const c of cards) mem.cards.set(c.id, c);
@@ -144,7 +144,7 @@ const Store = (function(){
       return;
     }
     const t = db.transaction(['pkgs','notes','cards','media'], 'readwrite');
-    await Promise.all(['notes','cards','media'].map(s => wipe(t, s, pkg.id, true)));
+    if (!merge) await Promise.all(['notes','cards','media'].map(s => wipe(t, s, pkg.id, true)));
     t.objectStore('pkgs').put(pkg);
     const ns = t.objectStore('notes'), cs = t.objectStore('cards'), ms = t.objectStore('media');
     for (const n of notes) ns.put(n);
@@ -2498,9 +2498,31 @@ async function importFile(file){
     }
     // keep what was created or edited on the phone
     const dropNotes = [], dropCards = [], keptCards = [];
-    let pending = 0;
+    let pending = 0, preserved = [];
     if (old) {
+      // Same deck name: add to what is already here instead of replacing it. A file from one
+      // study session only carries that session's cards, so everything else must stay.
+      pkg.notetypes = Object.assign({}, old.notetypes, r.notetypes);
+      pkg.decks = Object.assign({}, old.decks, r.decks);
+      pkg.ankiPaths = Object.assign({}, old.ankiPaths || {}, JSON.parse(JSON.stringify(r.decks)));
+      pkg.hist = Object.assign({}, old.hist || {});
+      for (const d in (r.hist || {})) { const o = pkg.hist[d] || [0,0,0,0,0], n = r.hist[d]; pkg.hist[d] = o.map((v, i) => Math.max(v || 0, n[i] || 0)); }
       const oldNotes = await Store.getByIndex('notes', pkgId);
+      const newCardIds = new Set(cards.map(c => c.id));
+      const goneNotes = new Set();
+      for (const on of oldNotes) {
+        if (on.local || noteById.has(on.id)) continue;
+        const twin = on.guid && noteByGuid.get(on.guid);
+        if (twin) {            // the same card came again under a new id: keep one copy and its progress
+          goneNotes.add(on.id); dropNotes.push(on.id);
+          for (const oc of pkgCards(pkgId)) if (oc.nid === on.id) {
+            dropCards.push(oc.id);
+            const nc = cards.find(c => c.nid === twin.id && c.ord === oc.ord), st = A.states.get(oc.id);
+            if (nc && st) { const ex = states.find(x => x[0] === nc.id); const cur = ex ? ex[1] : A.states.get(nc.id); if (!cur || (cur.u || 0) < (st.u || 0)) states.push([nc.id, st]); }
+          }
+        } else { ntUse[on.mid] = (ntUse[on.mid] || 0) + 1; if (on.dirty) pending++; }
+      }
+      preserved = pkgCards(pkgId).filter(c => !c.local && !newCardIds.has(c.id) && !goneNotes.has(c.nid));
       const target = new Map();
       for (const on of oldNotes) {
         if (on.local) {
@@ -2539,7 +2561,7 @@ async function importFile(file){
       for (const n of notes) if (n.dirty) for (const c of cards) if (c.nid === n.id) c.tags = n.tags;
     }
     pkg.pending = pending;
-    pkg.count = cards.length + keptCards.length;
+    pkg.count = cards.length + keptCards.length + preserved.length;
     if (old && old.customDecks) {
       pkg.customDecks = {};
       for (const did in old.customDecks) {
@@ -2553,19 +2575,19 @@ async function importFile(file){
         else pkg.decks[did] = cd.path.slice();
       }
     }
-    await Store.importPkg(pkg, notes, cards, media);
+    await Store.importPkg(pkg, notes, cards, media, !!old);
     if (keptCards.length) await Store.putMany('cards', keptCards);
     if (remapped.length) { await Store.putMany('notes', remapped); for (const n of remapped) markNote(n); }
     await Store.deleteMany('notes', dropNotes); await Store.deleteMany('cards', dropCards);
     await Store.putStates(states);
     for (const [id, c] of A.cards) if (c.pkg === pkgId) A.cards.delete(id);
-    for (const c of cards.concat(keptCards)) A.cards.set(c.id, c);
+    for (const c of cards.concat(keptCards, preserved)) A.cards.set(c.id, c);
     for (const [cid, s] of states) { A.states.set(cid, s); R.dirty.add(bucketOf(cid)); }
     A.pkgs.set(pkgId, pkg);
     A.noteCache.delete(pkgId); mediaCache.clear();
     scheduleSync(1500);
     progressHide();
-    toast(cards.length + ' cards importados' + (brought ? ', com o progresso que já vinha do Anki.' : '.'));
+    toast(old ? cards.length + (cards.length === 1 ? ' card entrou' : ' cards entraram') + ' em ' + pkg.name + '. O deck agora tem ' + pkg.count + '.' : cards.length + ' cards importados' + (brought ? ', com o progresso que já vinha do Anki.' : '.'));
     go('deck', { pkg: pkgId }, { reset:true });
     NAV.unshift({ name: 'home', params: {} });
     if (R.db) { R.decksDirty = true; scheduleSync(); }
