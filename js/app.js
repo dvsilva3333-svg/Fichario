@@ -1276,14 +1276,14 @@ function bkStatus(){
   el.textContent = BK.at ? 'Último backup feito neste aparelho: ' + new Date(BK.at).toLocaleDateString('pt-BR') + ' às ' + new Date(BK.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '.' : 'Nenhum backup feito neste aparelho ainda.';
   $('bkBtn').textContent = BK.blob ? 'Salvar ' + BK.name : 'Fazer backup agora';
   $('bkHomeLabel').textContent = BK.blob ? 'Salvar ' + BK.name : 'Fazer backup agora';
-  $('bkHomeSub').textContent = BK.blob ? 'Arquivo pronto. Toque de novo para salvar.' : BK.at ? 'Último: ' + new Date(BK.at).toLocaleDateString('pt-BR') : 'Nenhum backup feito ainda';
+  $('bkHomeSub').textContent = BK.blob ? 'Arquivo pronto. Toque de novo para salvar.' : BK.at ? 'Último: ' + new Date(BK.at).toLocaleDateString('pt-BR') + (Date.now() - BK.at >= BK_DAYS * DAY ? ' · há ' + Math.floor((Date.now() - BK.at) / DAY) + ' dias, vale fazer outro' : '') : 'Nenhum backup feito ainda';
   $('bkNote').textContent = BK.blob ? 'Arquivo pronto. Toque de novo para salvar; no iPhone, escolha “Salvar em Arquivos” e uma pasta do iCloud Drive.' : '';
 }
 function drawBkBanner(){
   const el = $('bkBanner'); if (!el) return;
   const days = BK.at ? Math.floor((Date.now() - BK.at) / DAY) : -1;
   const show = A.pkgs.size > 0 && A.cards.size > 0 && (days < 0 ? (A.game && A.game.xp > 0) : days >= BK_DAYS);
-  el.hidden = !show;
+  el.hidden = true; return;   // o aviso do topo foi desligado a pedido; o lembrete fica na linha 'Fazer backup agora'
   if (show) el.querySelector('span').textContent = days < 0 ? 'Seus cards só existem neste aparelho. Faça o primeiro backup.' : 'Último backup há ' + days + ' dias. Vale fazer outro.';
 }
 async function makeBackup(){
