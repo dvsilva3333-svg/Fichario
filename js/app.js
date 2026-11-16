@@ -931,7 +931,7 @@ $('ovClose').addEventListener('click', progressHide);
 
 // ---------- home ----------
 RENDER.home = function(){
-  drawGame(); drawHeat(); drawBkBanner();
+  drawGame(); drawHeat(); drawBkBanner(); bkStatus();
   if (!A.pkgs.size) { show('empty'); return; }
   show('home');
   const pk = [...A.pkgs.values()].sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
@@ -1270,6 +1270,8 @@ function bkStatus(){
   const el = $('bkStatus'); if (!el) return;
   el.textContent = BK.at ? 'Último backup feito neste aparelho: ' + new Date(BK.at).toLocaleDateString('pt-BR') + ' às ' + new Date(BK.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '.' : 'Nenhum backup feito neste aparelho ainda.';
   $('bkBtn').textContent = BK.blob ? 'Salvar ' + BK.name : 'Fazer backup agora';
+  $('bkHomeLabel').textContent = BK.blob ? 'Salvar ' + BK.name : 'Fazer backup agora';
+  $('bkHomeSub').textContent = BK.blob ? 'Arquivo pronto. Toque de novo para salvar.' : BK.at ? 'Último: ' + new Date(BK.at).toLocaleDateString('pt-BR') : 'Nenhum backup feito ainda';
   $('bkNote').textContent = BK.blob ? 'Arquivo pronto. Toque de novo para salvar; no iPhone, escolha “Salvar em Arquivos” e uma pasta do iCloud Drive.' : '';
 }
 function drawBkBanner(){
@@ -1320,6 +1322,7 @@ async function readBackup(file){
     if (!man || man.app !== 'fichario') throw new Error('Este arquivo não é um backup do Fichário. Para decks do Anki, use Importar (.apkg).');
     BK.pending = { zip, man };
     progressHide();
+    if (A.view !== 'settings') go('settings');
     $('bkRestoreBox').hidden = false;
     $('bkRestoreText').textContent = 'Backup de ' + new Date(man.at).toLocaleDateString('pt-BR') + ': ' + man.cards.toLocaleString('pt-BR') + ' cards em ' + man.decks.length + (man.decks.length === 1 ? ' deck' : ' decks') + (man.decks.length ? ' (' + man.decks.slice(0, 4).join(', ') + ')' : '') + ', nível ' + man.level + '. Restaurar apaga tudo o que está neste aparelho agora (' + A.cards.size.toLocaleString('pt-BR') + ' cards) e coloca o backup no lugar.';
     $('bkRestoreBox').scrollIntoView({ block: 'center' });
@@ -1349,7 +1352,9 @@ $('bkRestoreBtn').addEventListener('click', () => { $('bkFile').value = ''; $('b
 $('bkFile').addEventListener('change', () => { const f = $('bkFile').files[0]; if (f) readBackup(f); });
 $('bkRestoreGo').addEventListener('click', applyBackup);
 $('bkRestoreCancel').addEventListener('click', () => { BK.pending = null; $('bkRestoreBox').hidden = true; });
-$('bkBanner').addEventListener('click', () => go('settings'));
+$('bkBanner').addEventListener('click', makeBackup);
+$('bkBtnHome').addEventListener('click', makeBackup);
+$('bkRestoreHome').addEventListener('click', () => { $('bkFile').value = ''; $('bkFile').click(); });
 
 // ---------- deck ----------
 function deckTree(pkg){
