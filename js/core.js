@@ -468,7 +468,38 @@
     }
   }
 
-  const api = { dayKeyOf, clozeNumbers, parseApkg, buildApkg, exportSched, importSched, toFsrs, fromFsrs, packState, unpackState, renderCard, renderTemplate, renderCloze, stripHtml, pbFields };
+  // ---------- questão de múltipla escolha colada como texto ----------
+  // Separa enunciado, alternativas (A a E), gabarito e comentário de um texto colado.
+  function parseMcq(text) {
+    let t = String(text || '').replace(/\r\n?/g, '\n').replace(/ /g, ' ').trim();
+    const out = { stem: '', opts: {}, ans: '', exp: '' };
+    if (!t) return out;
+    const expM = t.match(/\n\s*(coment[áa]rio|explica[çc][ãa]o|justificativa)\s*[:\-–]\s*([\s\S]*)$/i);
+    if (expM) { out.exp = expM[2].trim(); t = t.slice(0, expM.index); }
+    const ansM = t.match(/(?:^|\s)(?:gabarito|resposta(?: correta)?|alternativa correta|gab\.?)\s*[:\-–]?\s*(?:letra\s*)?\(?([A-Ea-e])\)?[.\s]*(?=\n|$)/i);
+    if (ansM) { out.ans = ansM[1].toUpperCase(); t = (t.slice(0, ansM.index) + t.slice(ansM.index + ansM[0].length)).trim(); }
+    const mark = /^[ \t]*\(?([A-Ea-e])[)\.\-–:][ \t]+/;
+    let lines = t.split('\n');
+    if (!lines.some(l => mark.test(l))) {
+      // alternativas na mesma linha: "... A) x B) y C) z"
+      t = t.replace(/\s+(?=\(?[A-Ea-e]\)\s)/g, '\n');
+      lines = t.split('\n');
+    }
+    const want = ['A', 'B', 'C', 'D', 'E'];
+    let cur = null, next = 0;
+    const stem = [];
+    for (const line of lines) {
+      const m = line.match(mark);
+      if (m && m[1].toUpperCase() === want[next]) { cur = want[next++]; out.opts[cur] = line.replace(mark, '').trim(); }
+      else if (cur) out.opts[cur] += (line.trim() ? '\n' + line.trim() : '');
+      else stem.push(line);
+    }
+    out.stem = stem.join('\n').trim();
+    for (const k in out.opts) out.opts[k] = out.opts[k].trim();
+    return out;
+  }
+
+  const api = { dayKeyOf, clozeNumbers, parseMcq, parseApkg, buildApkg, exportSched, importSched, toFsrs, fromFsrs, packState, unpackState, renderCard, renderTemplate, renderCloze, stripHtml, pbFields };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.FichCore = api;
 })(typeof self !== 'undefined' ? self : this);
 

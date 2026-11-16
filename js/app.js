@@ -890,7 +890,7 @@ function back(){
 function refresh(){ const top = NAV[NAV.length - 1]; if (!top) return; if (['home','deck','tags','stats','errors'].includes(top.name)) RENDER[top.name](Object.assign({}, top.params, { back:true })); }
 function show(view, title, small){
   A.view = view;
-  for (const v of ['home','empty','deck','tags','browse','edit','wrong','study','stats','settings','errors','errdetail','newcard','lesson']) $(v).hidden = v !== view;
+  for (const v of ['home','empty','deck','tags','browse','edit','wrong','study','stats','settings','errors','errdetail','newcard','lesson','mcq','focus']) $(v).hidden = v !== view;
   const root = view === 'home' || view === 'empty';
   $('backBtn').hidden = root;
   $('settingsBtn').hidden = !(root || view === 'deck');
@@ -918,7 +918,7 @@ $('ovClose').addEventListener('click', progressHide);
 
 // ---------- home ----------
 RENDER.home = function(){
-  drawGame();
+  drawGame(); drawHeat();
   if (!A.pkgs.size) { show('empty'); return; }
   show('home');
   const pk = [...A.pkgs.values()].sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
@@ -1006,6 +1006,233 @@ function levelUp(level){
 }
 
 $('goalSel').addEventListener('change', e => { A.game.goal = Number(e.target.value) || 500; Store.kvSet('game', A.game).catch(()=>{}); drawGame(); });
+
+// ---------- múltipla escolha ----------
+// Tipo de nota próprio; o destaque do gabarito é feito só com CSS, então funciona igual no Anki.
+const MCQ_ID = 'fm';
+const MCQ_CSS = '.card {\n  font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;\n  font-size: 19px;\n  line-height: 1.45;\n  text-align: left;\n  color: #1c1c1e;\n  background-color: #ffffff;\n}\n.card.nightMode, .card.night_mode { color: #f2f2f7; background-color: #1c1c1e; }\n' +
+  '.mcq-q { margin: 0 0 14px; }\n.opt { display: flex; gap: 10px; align-items: flex-start; padding: 11px 12px; margin: 8px 0; border-radius: 12px; border: 1.5px solid rgba(128,128,128,.4); cursor: pointer; }\n' +
+  '.opt b { flex: none; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: rgba(128,128,128,.22); font-size: 15px; }\n' +
+  '.mcq-back .opt { cursor: default; }\n.mcq-back .opt.picked { border-color: #e03131; background: rgba(224,49,49,.16); }\n.mcq-back .opt.picked b { background: #e03131; color: #fff; }\n' +
+  ['A','B','C','D','E'].map(k => '.mcq-back .mcq[data-ans="' + k + '"] .opt[data-k="' + k + '"]').join(',\n') + ' { border-color: #2f9e44; background: rgba(47,158,68,.18); }\n' +
+  ['A','B','C','D','E'].map(k => '.mcq-back .mcq[data-ans="' + k + '"] .opt[data-k="' + k + '"] b').join(',\n') + ' { background: #2f9e44; color: #fff; }\n' +
+  '.mcq-ans { font-weight: 700; margin: 14px 0 8px; }\n.mcq-exp { padding: 12px; border-radius: 12px; background: rgba(128,128,128,.16); }\n';
+const mcqNotetype = () => ({
+  name: 'Múltipla Escolha (Fichário)', kind: 0, css: MCQ_CSS, mcq: true,
+  flds: ['Pergunta', 'A', 'B', 'C', 'D', 'E', 'Correta', 'Comentário'],
+  tmpls: [{ name: 'Questão',
+    q: '<div class="mcq" data-ans="{{text:Correta}}">\n<div class="mcq-q">{{Pergunta}}</div>\n' + ['A','B','C','D','E'].map(k => '{{#' + k + '}}<div class="opt" data-k="' + k + '"><b>' + k + '</b><span>{{' + k + '}}</span></div>{{/' + k + '}}').join('\n') + '\n</div>',
+    a: '<div class="mcq-back">{{FrontSide}}</div>\n\n<hr id=answer>\n\n<div class="mcq-ans">Gabarito: {{text:Correta}}</div>\n{{#Comentário}}<div class="mcq-exp">{{Comentário}}</div>{{/Comentário}}' }]
+});
+async function ensureMcqNt(pkg){
+  const p = A.pkgs.get(pkg);
+  if (!p.notetypes[MCQ_ID]) { p.notetypes[MCQ_ID] = mcqNotetype(); await Store.putMany('pkgs', [p]); }
+  return p.notetypes[MCQ_ID];
+}
+const textToHtml = s => esc(String(s || '').trim()).replace(/\n/g, '<br>');
+const MQ = { pkg: null };
+RENDER.mcq = function(params){
+  const p = A.pkgs.get(params.pkg);
+  if (!p) { go('home', {}, { reset:true }); return; }
+  show('mcq', 'Múltipla escolha', true);
+  if (params.back && MQ.pkg === p.id) return;
+  MQ.pkg = p.id;
+  const cur = mostUsedDeck(p.id);
+  $('mqDeck').innerHTML = deckOptions(p.id).map(o => '<option value="' + esc(o.id) + '"' + (o.id === cur ? ' selected' : '') + '>' + esc(o.path) + '</option>').join('');
+  $('mqDeck')._wired = false; wireDeckSelect($('mqDeck'), p.id);
+  mcqClear(true);
+};
+function mcqClear(all){
+  for (const id of ['mqStem','mqA','mqB','mqC','mqD','mqE','mqExp']) $(id).value = '';
+  if (all) { $('mqPaste').value = ''; $('mqTags').value = ''; }
+  for (const r of document.querySelectorAll('input[name=mqAns]')) r.checked = false;
+}
+$('mqSplit').addEventListener('click', () => {
+  const r = C.parseMcq($('mqPaste').value);
+  const n = Object.keys(r.opts).length;
+  if (!r.stem && !n) { toast('Cole a questão no campo acima primeiro.'); return; }
+  $('mqStem').value = r.stem;
+  for (const k of ['A','B','C','D','E']) $('mq' + k).value = r.opts[k] || '';
+  $('mqExp').value = r.exp || '';
+  for (const el of document.querySelectorAll('input[name=mqAns]')) el.checked = el.value === r.ans;
+  toast(n < 2 ? 'Não achei as alternativas. Confira se elas começam com A), B), C)…' : n + ' alternativas separadas' + (r.ans ? ', gabarito ' + r.ans + '.' : '. Marque o gabarito.'));
+  $('mqStem').scrollIntoView({ block: 'center', behavior: 'smooth' });
+});
+$('mqSave').addEventListener('click', async () => {
+  const pkg = MQ.pkg; if (!pkg) return;
+  const stem = $('mqStem').value.trim();
+  const opts = ['A','B','C','D','E'].map(k => $('mq' + k).value.trim());
+  const picked = document.querySelector('input[name=mqAns]:checked');
+  if (!stem) { toast('Escreva o enunciado.'); return; }
+  if (opts.filter(Boolean).length < 2) { toast('Preencha pelo menos duas alternativas.'); return; }
+  if (!picked) { toast('Marque qual alternativa é a correta.'); return; }
+  if (!opts['ABCDE'.indexOf(picked.value)]) { toast('A alternativa marcada como correta está vazia.'); return; }
+  const did = $('mqDeck').value;
+  if (!did || did === '__new') { toast('Escolha o baralho.'); return; }
+  try {
+    await ensureMcqNt(pkg);
+    const flds = [textToHtml(stem)].concat(opts.map(textToHtml), [picked.value, textToHtml($('mqExp').value)]);
+    await saveNewNote(pkg, { mid: MCQ_ID, flds, tags: $('mqTags').value.trim().split(/\s+/).filter(Boolean).join(' '), did });
+    mcqClear(false); $('mqPaste').value = '';
+    toast('Questão salva. Pode colar a próxima.');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch(e) { toast((e && e.message) || 'Não consegui salvar a questão.'); }
+});
+$('mcqBtn').addEventListener('click', () => go('mcq', { pkg: curDeck() }));
+
+// ---------- heatmap ----------
+const HEAT_STEPS = [1, 20, 60, 120];   // respostas no dia: até 19, 20–59, 60–119, 120+
+function drawHeat(){
+  const el = $('heat'); if (!el) return;
+  const hist = histFor([...A.pkgs.keys()]);
+  const now = Date.now();
+  const today = new Date(now - ROLLOVER_H * 3600e3); today.setHours(12, 0, 0, 0);
+  const WEEKS = 53, cell = 13, gap = 3, left = 18, top = 16;
+  const start = new Date(today); start.setDate(start.getDate() - today.getDay() - (WEEKS - 1) * 7);
+  const months = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  let rects = '', labels = '', total = 0, active = 0, best = 0, lastMonth = -1;
+  for (let w = 0; w < WEEKS; w++) {
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(start); day.setDate(start.getDate() + w * 7 + d);
+      if (day > today) continue;
+      const key = day.getFullYear() + '-' + (day.getMonth() + 1) + '-' + day.getDate();
+      const n = (hist[key] || [0])[0] || 0;
+      if (n) { total += n; active++; best = Math.max(best, n); }
+      const lvl = n >= HEAT_STEPS[3] ? 4 : n >= HEAT_STEPS[2] ? 3 : n >= HEAT_STEPS[1] ? 2 : n >= HEAT_STEPS[0] ? 1 : 0;
+      rects += '<rect class="h' + lvl + '" x="' + (left + w * (cell + gap)) + '" y="' + (top + d * (cell + gap)) + '" width="' + cell + '" height="' + cell + '" rx="3" data-d="' + day.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }) + '" data-n="' + n + '"/>';
+      if (d === 0 && day.getMonth() !== lastMonth && day.getDate() <= 7) { lastMonth = day.getMonth(); labels += '<text x="' + (left + w * (cell + gap)) + '" y="10">' + months[lastMonth] + '</text>'; }
+    }
+  }
+  const W = left + WEEKS * (cell + gap), H = top + 7 * (cell + gap);
+  const wd = ['S','T','Q'].map((t, i) => '<text x="0" y="' + (top + (1 + i * 2) * (cell + gap) + 10) + '">' + t + '</text>').join('');
+  const sum = total ? total.toLocaleString('pt-BR') + (total === 1 ? ' resposta' : ' respostas') + ' em ' + active + (active === 1 ? ' dia' : ' dias') + ' no último ano · média de ' + Math.round(total / active) + ' por dia estudado · recorde ' + best : 'Suas revisões de cada dia vão aparecer aqui.';
+  el.innerHTML = '<div class="paper heat"><div class="head"><span>Revisões por dia</span><span class="heatleg"><i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i></span></div>' +
+    '<div class="heatscroll" tabindex="0" role="img" aria-label="Mapa de calor das revisões do último ano. ' + esc(sum) + '"><svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' + labels + wd + rects + '</svg></div>' +
+    '<p class="heatsum" id="heatSum" aria-live="polite">' + esc(sum) + '</p></div>';
+  const sc = el.querySelector('.heatscroll'); sc.scrollLeft = sc.scrollWidth;
+  sc.addEventListener('click', e => {
+    const r = e.target.closest('rect'); if (!r) return;
+    for (const x of sc.querySelectorAll('rect.sel')) x.classList.remove('sel');
+    r.classList.add('sel');
+    const n = Number(r.dataset.n);
+    $('heatSum').textContent = r.dataset.d + ': ' + (n ? n + (n === 1 ? ' resposta' : ' respostas') : 'nenhuma resposta');
+  });
+}
+
+// ---------- foco: pomodoro e tarefas ----------
+const FOCUS_XP = 25;
+const F = { work: 25, brk: 5, long: 15, every: 4, mode: 'work', endAt: 0, left: 0, cycle: 0, day: '', doneToday: 0, tasks: [], cur: null };
+let focusAudio = null, wakeLock = null;
+const saveFocus = () => Store.kvSet('focus', F).catch(()=>{});
+const focusDur = m => Math.max(1, Number(m === 'work' ? F.work : m === 'long' ? F.long : F.brk) || 1) * 60000;
+const focusLeft = () => F.endAt ? Math.max(0, F.endAt - Date.now()) : (F.left || focusDur(F.mode));
+const fmtClock = ms => { const s = Math.ceil(ms / 1000); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+const focusLabel = m => m === 'work' ? 'Foco' : m === 'long' ? 'Pausa longa' : 'Pausa';
+function focusBeep(){
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    focusAudio = focusAudio || new AC();
+    if (focusAudio.state === 'suspended') focusAudio.resume();
+    [0, 0.28, 0.56].forEach((t, i) => {
+      const o = focusAudio.createOscillator(), g = focusAudio.createGain();
+      o.type = 'sine'; o.frequency.value = [660, 880, 1100][i];
+      g.gain.setValueAtTime(0.0001, focusAudio.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.25, focusAudio.currentTime + t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, focusAudio.currentTime + t + 0.24);
+      o.connect(g); g.connect(focusAudio.destination); o.start(focusAudio.currentTime + t); o.stop(focusAudio.currentTime + t + 0.26);
+    });
+  } catch(e) {}
+}
+async function focusWake(on){
+  try {
+    if (on && navigator.wakeLock && !wakeLock && document.visibilityState === 'visible') { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+    else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch(e) { wakeLock = null; }
+}
+function focusFinish(completed){
+  const was = F.mode;
+  F.endAt = 0; F.left = 0;
+  if (was === 'work') {
+    if (completed) {
+      const today = dayKey(); if (F.day !== today) { F.day = today; F.doneToday = 0; }
+      F.cycle++; F.doneToday++;
+      const t = F.tasks.find(x => x.id === F.cur); if (t) t.pomos = (t.pomos || 0) + 1;
+      addXp(FOCUS_XP);
+    }
+    F.mode = completed && F.cycle % Math.max(1, F.every) === 0 ? 'long' : 'brk';
+  } else F.mode = 'work';
+  saveFocus(); focusWake(false);
+  if (completed) {
+    focusBeep(); try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch(e) {}
+    toast(was === 'work' ? 'Ciclo de foco concluído: +' + FOCUS_XP + ' XP. Hora da ' + focusLabel(F.mode).toLowerCase() + '.' : 'Pausa encerrada. Bora para o próximo ciclo.');
+  }
+  drawFocus();
+}
+function focusTick(){
+  if (F.endAt && Date.now() >= F.endAt) { focusFinish(true); return; }
+  const pill = $('focusPill');
+  pill.hidden = !F.endAt || A.view === 'focus';
+  if (F.endAt) pill.textContent = fmtClock(focusLeft());
+  if (A.view === 'focus') drawFocusClock();
+}
+function drawFocusClock(){
+  const left = focusLeft(), total = focusDur(F.mode), R0 = 104, CIRC = 2 * Math.PI * R0;
+  $('fcTime').textContent = fmtClock(left);
+  $('fcMode').textContent = focusLabel(F.mode);
+  $('fcArc').style.strokeDasharray = CIRC;
+  $('fcArc').style.strokeDashoffset = CIRC * (1 - Math.min(1, left / total));
+  $('fcRing').classList.toggle('rest', F.mode !== 'work');
+  $('fcStart').textContent = F.endAt ? 'Pausar' : (F.left ? 'Continuar' : 'Começar');
+}
+function drawFocus(){
+  if (A.view !== 'focus') { focusTick(); return; }
+  if (F.day !== dayKey()) { F.day = dayKey(); F.doneToday = 0; }
+  drawFocusClock();
+  const t = F.tasks.find(x => x.id === F.cur && !x.done);
+  $('fcInfo').textContent = (F.doneToday ? F.doneToday + (F.doneToday === 1 ? ' ciclo hoje' : ' ciclos hoje') : 'Nenhum ciclo hoje ainda') + (t ? ' · em: ' + t.text : '');
+  for (const [id, k] of [['fcWork','work'],['fcBrk','brk'],['fcLong','long']]) if (document.activeElement !== $(id)) $(id).value = F[k];
+  const open = F.tasks.filter(x => !x.done), done = F.tasks.filter(x => x.done);
+  const row = x => '<li class="task' + (x.done ? ' done' : '') + (x.id === F.cur && !x.done ? ' cur' : '') + '" data-id="' + x.id + '">' +
+    '<button class="tk" data-act="check" role="checkbox" aria-checked="' + (x.done ? 'true' : 'false') + '" aria-label="' + (x.done ? 'Reabrir' : 'Concluir') + ': ' + esc(x.text) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>' +
+    '<button class="tt" data-act="pick"' + (x.done ? ' disabled' : '') + '><span>' + esc(x.text) + '</span>' + (x.pomos ? '<small>' + x.pomos + (x.pomos === 1 ? ' ciclo' : ' ciclos') + '</small>' : '') + '</button>' +
+    '<button class="tx" data-act="del" aria-label="Apagar tarefa: ' + esc(x.text) + '">×</button></li>';
+  $('taskList').innerHTML = open.concat(done).map(row).join('') || '<li class="taskempty">Nenhuma tarefa. Escreva acima o que vai estudar agora.</li>';
+  $('taskClear').hidden = !done.length;
+}
+RENDER.focus = function(){ show('focus', 'Foco', true); drawFocus(); $('focusPill').hidden = true; };
+$('fcStart').addEventListener('click', () => {
+  if (F.endAt) { F.left = Math.max(1000, F.endAt - Date.now()); F.endAt = 0; focusWake(false); }
+  else { F.endAt = Date.now() + (F.left || focusDur(F.mode)); F.left = 0; focusBeepPrime(); focusWake(true); }
+  saveFocus(); drawFocus();
+});
+function focusBeepPrime(){ try { const AC = window.AudioContext || window.webkitAudioContext; if (AC) { focusAudio = focusAudio || new AC(); if (focusAudio.state === 'suspended') focusAudio.resume(); } } catch(e) {} }
+$('fcReset').addEventListener('click', () => { F.endAt = 0; F.left = 0; focusWake(false); saveFocus(); drawFocus(); });
+$('fcSkip').addEventListener('click', () => focusFinish(false));
+for (const [id, k] of [['fcWork','work'],['fcBrk','brk'],['fcLong','long']]) $(id).addEventListener('change', e => {
+  F[k] = Math.min(180, Math.max(1, Math.round(Number(e.target.value)) || 1)); e.target.value = F[k];
+  if (!F.endAt) F.left = 0;
+  saveFocus(); drawFocus();
+});
+$('taskForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const text = $('taskIn').value.trim(); if (!text) return;
+  const t = { id: 't' + Date.now().toString(36), text: text.slice(0, 200), done: false, pomos: 0 };
+  F.tasks.push(t); if (!F.tasks.some(x => x.id === F.cur && !x.done)) F.cur = t.id;
+  $('taskIn').value = ''; saveFocus(); drawFocus();
+});
+$('taskList').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const id = b.closest('li').dataset.id, t = F.tasks.find(x => x.id === id); if (!t) return;
+  if (b.dataset.act === 'check') { t.done = !t.done; if (t.done && F.cur === id) { const n = F.tasks.find(x => !x.done); F.cur = n ? n.id : null; } }
+  else if (b.dataset.act === 'pick') F.cur = id;
+  else if (b.dataset.act === 'del') { F.tasks = F.tasks.filter(x => x.id !== id); if (F.cur === id) F.cur = null; }
+  saveFocus(); drawFocus();
+});
+$('taskClear').addEventListener('click', () => { F.tasks = F.tasks.filter(x => !x.done); saveFocus(); drawFocus(); });
+$('focusBtnHome').addEventListener('click', () => go('focus'));
+$('focusPill').addEventListener('click', () => { if (A.view !== 'focus') go('focus'); });
+setInterval(focusTick, 1000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { focusTick(); if (F.endAt && A.view === 'focus') focusWake(true); } });
 
 // ---------- deck ----------
 function deckTree(pkg){
@@ -1327,7 +1554,9 @@ async function showSpecific(c, keepSide, kind){
   $('cardState').textContent = S.mode === 'cram' ? 'Revisão extra' : S.kind === 'n' ? 'Novo' : S.kind === 'l' ? 'Aprendendo' : 'Revisão';
   host.classList.toggle('revealed', side === 'a'); host.classList.remove('flip');
   host.setAttribute('aria-label', side === 'q' ? 'Pergunta. Toque para ver a resposta.' : 'Resposta');
+  if (side === 'q') S.mcqPick = null;
   await paintInto(shadow, side === 'q' ? S.html.q : S.html.a, c.pkg, nt.css);
+  if (side === 'a') mcqMark();
   if (side === 'q') S.shownAt = Date.now();
   renderBar(side);
 }
@@ -1337,6 +1566,7 @@ function reveal(){
   host.classList.add('revealed'); void host.offsetWidth; host.classList.add('flip');
   host.setAttribute('aria-label', 'Resposta');
   paintInto(shadow, S.html.a, S.card.pkg, S.nt.css).then(() => {
+    mcqMark();
     const ans = shadow.getElementById('answer');
     if (ans) { const top = ans.getBoundingClientRect().top; if (top > window.innerHeight * 0.55) window.scrollBy({ top: top - window.innerHeight * 0.3, behavior: 'smooth' }); }
   });
@@ -1450,7 +1680,9 @@ function showDone(waitUntil){
   box.innerHTML = html + '<div class="stack"><button class="secondary" id="doneBack">Voltar</button></div>';
   $('doneBack').addEventListener('click', back);
 }
+shadow.addEventListener('click', e => { const o = e.target.closest && e.target.closest('.mcq .opt'); if (o && S.side === 'q') S.mcqPick = o.dataset.k; });
 host.addEventListener('click', () => { if (S.side === 'q' && !swipe.moved) reveal(); });
+function mcqMark(){ if (!S.mcqPick) return; const o = shadow.querySelector('.mcq-back .opt[data-k="' + S.mcqPick + '"]'); if (o) o.classList.add('picked'); }
 host.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && S.side === 'q') { e.preventDefault(); reveal(); } });
 document.addEventListener('keydown', e => {
   if (A.view !== 'study' || !S.card) return;
@@ -2837,6 +3069,7 @@ window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').addEventL
     }
   } catch(e) {}
   try { const g = await Store.kvGet('game'); A.game = g && typeof g.xp === 'number' ? { xp: g.xp, days: g.days || {}, goal: g.goal || 0 } : { xp: 0, days: {} }; } catch(e) { A.game = { xp: 0, days: {} }; }
+  try { const f = await Store.kvGet('focus'); if (f && typeof f === 'object') Object.assign(F, f, { tasks: Array.isArray(f.tasks) ? f.tasks : [] }); } catch(e) {}
   go('home', {}, { reset:true });
   loadScript(CDN.fsrs).then(makeFsrs).catch(()=>{});
   initRemote();

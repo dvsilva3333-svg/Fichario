@@ -25,6 +25,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
     </button>
     <button class="textbtn" id="undoBtn" hidden disabled>Desfazer</button>
+    <button class="focuspill" id="focusPill" hidden aria-label="Temporizador de foco em andamento"></button>
     <button class="iconbtn" id="statsBtn" aria-label="Estatísticas">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/></svg>
     </button>
@@ -38,6 +39,9 @@
   <section class="view wrap" id="home">
     <div class="gamehero"></div>
     <div id="homeList"></div>
+    <div id="heat"></div>
+    <p class="sectionlabel">Ferramentas</p>
+    <ul class="decks acts"><li><button class="deckrow act" id="focusBtnHome"><span class="ic" style="background:#FF6B35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 2M9.5 2.5h5"/></svg></span><span class="nm"><b>Foco: Pomodoro e tarefas</b></span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button></li></ul>
     <p class="sectionlabel">Caderno de erros</p>
     <ul class="decks acts"><li><button class="deckrow act" id="wrongBtnHome"><span class="ic" style="background:#FF3B30"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5"/><path d="M12 16.5v.01"/><path d="M10.3 3.9L2.6 17.3A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.7L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span><span class="nm"><b>Card de questão errada</b></span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button></li><li><button class="deckrow act" id="errorsBtnHome"><span class="ic" style="background:#FF9500"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 5.5v16"/></svg></span><span class="nm"><b>Caderno de erros</b></span><span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></button></li></ul>
     <p class="sectionlabel">Adicionar baralho</p>
@@ -69,7 +73,7 @@
   <section class="view wrap" id="deck" hidden>
     <div class="stack" style="margin-top:8px">
       <button class="primary" id="studyAllBtn">Estudar</button>
-      <div class="tiles"><button class="tile" id="newCardBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg><span>Novo card</span></button><button class="tile" id="lessonBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 12h7M9 16h5"/></svg><span>Cards de aula</span></button><button class="tile" id="wrongBtnDeck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5"/><path d="M12 16.5v.01"/><path d="M10.3 3.9L2.6 17.3A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.7L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>Questão errada</span></button><button class="tile" id="tagsBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span>Por tag</span></button><button class="tile" id="browseBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><span>Buscar</span></button></div>
+      <div class="tiles"><button class="tile" id="mcqBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="6" r="1.6"/><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="5" cy="18" r="1.6"/><path d="M10 6h10M10 12h10M10 18h10"/></svg><span>Múltipla escolha</span></button><button class="tile" id="newCardBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg><span>Novo card</span></button><button class="tile" id="lessonBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 12h7M9 16h5"/></svg><span>Cards de aula</span></button><button class="tile" id="wrongBtnDeck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5"/><path d="M12 16.5v.01"/><path d="M10.3 3.9L2.6 17.3A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-2.7L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span>Questão errada</span></button><button class="tile" id="tagsBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span>Por tag</span></button><button class="tile" id="browseBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><span>Buscar</span></button></div>
     </div>
     <div class="legend" id="deckLegend"><i class="n">novos</i><i class="l">aprendendo</i><i class="r">revisar</i></div>
     <ul class="decks subtree" id="subtree"></ul>
@@ -245,6 +249,64 @@
       <select class="inp" id="statsScope"></select>
     </div>
     <div id="statsBody"></div>
+  </section>
+
+  <section class="view wrap" id="mcq" hidden>
+    <div class="paper" style="margin-top:14px">
+      <div class="head"><span>Colar a questão inteira</span></div>
+      <div class="body">
+        <textarea class="inp" id="mqPaste" rows="5" placeholder="Cole aqui o enunciado com as alternativas A), B), C)… Se tiver, inclua “Gabarito: C” e “Comentário: …”." aria-label="Questão inteira"></textarea>
+        <button class="secondary" id="mqSplit" style="margin-top:12px">Separar alternativas</button>
+      </div>
+    </div>
+    <div class="paper" style="margin-top:16px">
+      <div class="head"><span>Questão</span><span>toque na letra da correta</span></div>
+      <div class="body">
+        <label class="lbl" for="mqStem">Enunciado</label>
+        <textarea class="inp" id="mqStem" rows="4"></textarea>
+        <div class="lbl" style="margin-top:14px">Alternativas</div>
+      <div class="mqopt"><label class="mqr"><input type="radio" name="mqAns" value="A" aria-label="A é a correta"><span>A</span></label><textarea class="inp" id="mqA" rows="1" placeholder="Alternativa A" aria-label="Alternativa A"></textarea></div>
+      <div class="mqopt"><label class="mqr"><input type="radio" name="mqAns" value="B" aria-label="B é a correta"><span>B</span></label><textarea class="inp" id="mqB" rows="1" placeholder="Alternativa B" aria-label="Alternativa B"></textarea></div>
+      <div class="mqopt"><label class="mqr"><input type="radio" name="mqAns" value="C" aria-label="C é a correta"><span>C</span></label><textarea class="inp" id="mqC" rows="1" placeholder="Alternativa C" aria-label="Alternativa C"></textarea></div>
+      <div class="mqopt"><label class="mqr"><input type="radio" name="mqAns" value="D" aria-label="D é a correta"><span>D</span></label><textarea class="inp" id="mqD" rows="1" placeholder="Alternativa D" aria-label="Alternativa D"></textarea></div>
+      <div class="mqopt"><label class="mqr"><input type="radio" name="mqAns" value="E" aria-label="E é a correta"><span>E</span></label><textarea class="inp" id="mqE" rows="1" placeholder="Alternativa E" aria-label="Alternativa E"></textarea></div>
+        <label class="lbl" for="mqExp" style="margin-top:14px">Comentário (aparece no verso)</label>
+        <textarea class="inp" id="mqExp" rows="3" placeholder="Por que a correta é a correta, pegadinha da banca…"></textarea>
+        <label class="lbl" for="mqDeck" style="margin-top:14px">Baralho</label>
+        <select class="inp" id="mqDeck"></select>
+        <label class="lbl" for="mqTags" style="margin-top:14px">Tags</label>
+        <input class="inp" id="mqTags" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="caderno_de_erros banca::SES-GO_2026">
+        <button class="primary" id="mqSave" style="margin-top:18px">Salvar questão</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="view wrap" id="focus" hidden>
+    <div class="fcwrap">
+      <div class="fcring" id="fcRing">
+        <svg viewBox="0 0 240 240" aria-hidden="true"><circle class="trk" cx="120" cy="120" r="104"/><circle class="arc" id="fcArc" cx="120" cy="120" r="104" transform="rotate(-90 120 120)"/></svg>
+        <div class="fcmid"><small id="fcMode">Foco</small><b id="fcTime" role="timer">25:00</b></div>
+      </div>
+      <p class="fcinfo" id="fcInfo"></p>
+      <div class="fcbtns"><button class="secondary" id="fcReset">Zerar</button><button class="primary" id="fcStart">Começar</button><button class="secondary" id="fcSkip">Pular</button></div>
+    </div>
+    <div class="paper" style="margin-top:18px">
+      <div class="head"><span>Duração em minutos</span></div>
+      <div class="body fcdur">
+        <label>Foco<input class="inp" id="fcWork" type="number" inputmode="numeric" min="1" max="180" value="25"></label>
+        <label>Pausa<input class="inp" id="fcBrk" type="number" inputmode="numeric" min="1" max="180" value="5"></label>
+        <label>Pausa longa<input class="inp" id="fcLong" type="number" inputmode="numeric" min="1" max="180" value="15"></label>
+      </div>
+    </div>
+    <div class="paper" style="margin-top:16px">
+      <div class="head"><span>Tarefas</span><span>toque na tarefa para focar nela</span></div>
+      <div class="body">
+        <form id="taskForm" class="taskform"><input class="inp" id="taskIn" placeholder="Ex.: 40 questões de cirurgia" aria-label="Nova tarefa" maxlength="200" autocomplete="off"><button class="primary" type="submit" aria-label="Adicionar tarefa">+</button></form>
+        <ul class="tasks" id="taskList"></ul>
+        <button class="danger" id="taskClear" hidden>Limpar concluídas</button>
+      </div>
+    </div>
+    <p class="note" style="text-align:center">A pausa longa vem a cada 4 ciclos. Cada ciclo de foco concluído vale 25 XP. Com o app fechado o aviso sonoro não toca; o tempo continua contando.</p>
   </section>
 
   <section class="view wrap" id="settings" hidden>
