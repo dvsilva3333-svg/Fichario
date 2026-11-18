@@ -543,3 +543,38 @@ table.perf td.bad{color:var(--again);font-weight:700}table.perf td.warn{color:va
 .pickover::-webkit-file-upload-button{cursor:pointer}
 .pickwrap:focus-within > button{outline:3px solid var(--accent);outline-offset:2px}
 .pickwrap:active > .deckrow{background:rgba(127,140,160,.12)}
+
+/* ---------- barra de formatação ---------- */
+.tools{display:block;padding:8px 10px}
+.trow{display:flex;align-items:center;gap:4px;overflow-x:auto;scrollbar-width:none}
+.trow::-webkit-scrollbar{display:none}
+.tools .trow button{flex:none;min-width:40px;height:40px;padding:0 9px;border:0;border-radius:10px;background:transparent;color:var(--ink);font-size:17px;display:grid;place-items:center;position:relative}
+.tools .trow button:hover{background:var(--fill)}
+.tools .trow button.on,.tools .trow button[aria-expanded="true"]{background:var(--fill);color:var(--accent)}
+.tools .trow button svg{width:21px;height:21px}
+.tools .ti{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:700}
+.tools .ta{font-weight:800;font-size:18px;line-height:1;margin-top:-4px}
+.tools .cbar{position:absolute;left:11px;right:11px;bottom:6px;height:4px;border-radius:2px}
+.tools .tbig svg{margin-top:-4px}
+.tsep{width:1px;height:22px;background:var(--line);flex:none;margin:0 3px}
+.tgrow{flex:1}
+.tpanel{margin-top:8px;padding:10px 4px 4px;border-top:.5px solid var(--line)}
+.ptabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:10px}
+.ptabs::-webkit-scrollbar{display:none}
+.tools .ptab{flex:none;height:32px;padding:0 12px;border-radius:999px;border:0;background:var(--fill);color:var(--ink);font-size:14px;font-weight:600;min-width:0}
+.tools .ptab.on{background:var(--accent);color:#fff}
+.sws{display:flex;flex-wrap:wrap;gap:8px}
+.tools .sw2{width:40px;height:40px;min-width:0;padding:0;border-radius:50%;border:2px solid transparent;background:transparent;display:grid;place-items:center}
+.tools .sw2 i{display:block;width:28px;height:28px;border-radius:50%}
+.tools .sw2.on{border-color:var(--ink)}
+.tools .sw2.none{color:var(--muted)}
+.tools .sw2.none svg{width:26px;height:26px}
+.pleg{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:10px;font-size:12.5px;color:var(--muted)}
+.pleg span{display:inline-flex;align-items:center;gap:5px}
+.pleg i{display:block;width:10px;height:10px;border-radius:50%}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tools .mgrid button{height:42px;border:0;border-radius:10px;background:var(--fill);color:var(--ink);font-size:15px;font-weight:600;text-align:left;padding:0 12px;min-width:0}
+.fld [contenteditable] ul,.fld [contenteditable] ol{margin:4px 0;padding-left:22px}
+/* the toolbar sticks to the screen top, not 56px inside the card (a clipping parent breaks sticky) */
+.paper.editor{overflow:visible}
+.paper.editor .tools{top:calc(52px + env(safe-area-inset-top,0px))}

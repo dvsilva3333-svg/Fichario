@@ -2013,6 +2013,22 @@ fcard.addEventListener('pointercancel', endSwipe);
 
 // ---------- editor ----------
 const COLORS = [['#D0312D','vermelho'],['#1F5FBF','azul'],['#23843F','verde'],['#D9730D','laranja'],['#7B3FB6','roxo']];
+// Paletas extras: tons escolhidos para ter o mesmo contraste (cerca de 4:1) no card claro e no escuro.
+const PALETTES = [
+  ['Significados', null],
+  ['Vibrante', [['#EE3030','vermelho'],['#D25705','laranja'],['#9E7700','dourado'],['#15903E','verde'],['#088A96','turquesa'],['#2279F3','azul'],['#985CED','roxo'],['#E72596','pink']]],
+  ['Oceano', [['#198D70','verde-água'],['#0F8B8B','turquesa'],['#0E87AF','azul-petróleo'],['#1D82CA','azul'],['#4B7AD9','azul-royal'],['#6A73DA','índigo']]],
+  ['Pôr do sol', [['#E93553','framboesa'],['#EB3713','vermelho'],['#C5610A','laranja'],['#A57404','âmbar'],['#D146A2','magenta'],['#B456C7','orquídea']]],
+  ['Terra', [['#B56A45','terracota'],['#A47430','caramelo'],['#768432','oliva'],['#5A8942','musgo'],['#4A896A','sálvia'],['#7D7D7D','cinza']]]
+];
+const paletteColors = i => PALETTES[i] && PALETTES[i][1] ? PALETTES[i][1] : COLORS;
+// Marca-texto: cores translúcidas, para o texto continuar legível no modo claro e no escuro.
+const HILITES = [['rgba(255, 212, 59, 0.45)','amarelo'],['rgba(105, 219, 124, 0.4)','verde'],['rgba(116, 192, 252, 0.42)','azul'],['rgba(250, 162, 193, 0.45)','rosa'],['rgba(255, 169, 77, 0.45)','laranja'],['rgba(177, 151, 252, 0.42)','lilás']];
+const ICO = {
+  hi: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 4.5l4 4L11 17H7v-4z"/><path d="M13 7l4 4"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="18.5" cy="12" r="1.9"/></svg>',
+  none: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/></svg>'
+};
 let edSeq = 0;
 function ntOptions(pkg, kindPref){
   const p = A.pkgs.get(pkg);
@@ -2032,12 +2048,19 @@ function mountEditor(container, opts){
   if (opts.angle) head += '<div style="padding:12px 16px 0"><p class="angle">' + esc(opts.angle) + '</p></div>';
   box.innerHTML = head +
     '<div class="tools" role="toolbar" aria-label="Formatação">' +
-      '<button data-cmd="bold" aria-label="Negrito">B</button>' +
-      COLORS.map(([c, n]) => '<button class="sw" data-color="' + c + '" aria-label="Cor ' + n + ': ' + esc(colorMeaning(c)) + '" title="' + esc(colorMeaning(c)) + '"><i style="background:' + c + '"></i></button>').join('') +
-      '<button data-cmd="cloze" aria-label="Transformar seleção em lacuna">[…]</button>' +
-      '<button data-cmd="clear" aria-label="Limpar formatação">Limpar</button>' +
+      '<div class="trow">' +
+        '<button data-cmd="bold" aria-label="Negrito" aria-pressed="false" title="Negrito (⌘B)"><b>B</b></button>' +
+        '<button data-cmd="italic" aria-label="Itálico" aria-pressed="false" title="Itálico (⌘I)"><i class="ti">I</i></button>' +
+        '<button data-cmd="underline" aria-label="Sublinhado" aria-pressed="false" title="Sublinhado (⌘U)"><u>U</u></button>' +
+        '<span class="tsep" aria-hidden="true"></span>' +
+        '<button data-panel="hi" aria-label="Grifar" aria-expanded="false" title="Grifar (⌘⇧H)" class="tbig">' + ICO.hi + '<span class="cbar" data-role="hibar"></span></button>' +
+        '<button data-panel="color" aria-label="Cor do texto" aria-expanded="false" title="Cor do texto" class="tbig"><span class="ta">A</span><span class="cbar" data-role="colbar"></span></button>' +
+        '<button data-cmd="cloze" aria-label="Transformar seleção em lacuna" title="Lacuna" data-role="clozebtn">[…]</button>' +
+        '<span class="tgrow" aria-hidden="true"></span>' +
+        '<button data-panel="more" aria-label="Mais formatação" aria-expanded="false" title="Mais">' + ICO.more + '</button>' +
+      '</div>' +
+      '<div class="tpanel" data-role="tpanel" hidden></div>' +
     '</div>' +
-    '<div class="colorleg">' + COLORS.map(([c]) => '<span><i style="background:' + c + '"></i>' + esc(colorMeaning(c)) + '</span>').join('') + '</div>' +
     (isNew ? '<div class="fld"><div class="lbl">Tipo de nota</div><select class="inp" data-role="nt" style="margin-top:0">' +
       ntOptions(pkg).map(o => '<option value="' + esc(o.id) + '"' + (o.id === d.mid ? ' selected' : '') + '>' + esc(o.nt.name) + (o.nt.kind === 1 ? ' (lacunas)' : '') + '</option>').join('') + '</select></div>' +
       '<div class="fld"><div class="lbl">Baralho</div><select class="inp" data-role="deck" style="margin-top:0">' +
@@ -2082,21 +2105,102 @@ function mountEditor(container, opts){
   }
   drawFields();
   if (isNew) {
-    q('[data-role=nt]').addEventListener('change', e => { const cur = readFields(); d.mid = e.target.value; d.flds = cur; drawFields(); });
+    q('[data-role=nt]').addEventListener('change', e => { const cur = readFields(); d.mid = e.target.value; d.flds = cur; drawFields(); syncCloze(); });
   }
   let lastEditable = null;
   box.addEventListener('focusin', e => { if (e.target.isContentEditable) lastEditable = e.target.closest('[contenteditable]'); });
-  const tools = q('.tools');
+  const tools = q('.tools'), panel = q('[data-role=tpanel]');
+  let openPanel = null;
+  const lastColor = () => (A.prefs.fmt && A.prefs.fmt.color) || COLORS[1][0];
+  const lastHi = () => (A.prefs.fmt && A.prefs.fmt.hi) || HILITES[0][0];
+  const palIdx = () => Math.min(PALETTES.length - 1, Math.max(0, (A.prefs.fmt && A.prefs.fmt.pal) || 0));
+  const setFmt = (k, v) => { A.prefs.fmt = Object.assign({}, A.prefs.fmt, { [k]: v }); savePrefs(); };
+  function paintBars(){ q('[data-role=colbar]').style.background = lastColor(); q('[data-role=hibar]').style.background = lastHi(); }
+  function syncCloze(){ const nt = p.notetypes[d.mid]; q('[data-role=clozebtn]').hidden = !(nt && nt.kind === 1); }
+  paintBars(); syncCloze();
+  function drawPanel(kind){
+    openPanel = kind;
+    for (const b of tools.querySelectorAll('[data-panel]')) b.setAttribute('aria-expanded', String(b.dataset.panel === kind));
+    if (!kind) { panel.hidden = true; panel.innerHTML = ''; return; }
+    const sw = (val, name, attr, meaning, cur) => '<button class="sw2' + (val === cur ? ' on' : '') + '" ' + attr + '="' + val + '" aria-label="' + esc(name + (meaning ? ': ' + meaning : '')) + '" title="' + esc(meaning || name) + '"><i style="background:' + val + '"></i></button>';
+    let h = '';
+    if (kind === 'color') {
+      const pi = palIdx(), cols = paletteColors(pi);
+      h = '<div class="ptabs" role="group" aria-label="Paleta">' + PALETTES.map(([n], i) => '<button class="ptab' + (i === pi ? ' on' : '') + '" data-pal="' + i + '" aria-pressed="' + (i === pi) + '">' + esc(n) + '</button>').join('') + '</div>' +
+        '<div class="sws">' + cols.map(([c, n]) => sw(c, n, 'data-color', pi === 0 ? colorMeaning(c) : '', lastColor())).join('') +
+        '<button class="sw2 none" data-color="none" aria-label="Tirar a cor" title="Tirar a cor">' + ICO.none + '</button></div>' +
+        (pi === 0 ? '<div class="pleg">' + COLORS.map(([c]) => '<span><i style="background:' + c + '"></i>' + esc(colorMeaning(c)) + '</span>').join('') + '</div>' : '');
+    } else if (kind === 'hi') {
+      h = '<div class="sws">' + HILITES.map(([c, n]) => sw(c, n, 'data-hi', '', lastHi())).join('') +
+        '<button class="sw2 none" data-hi="none" aria-label="Tirar o grifo" title="Tirar o grifo">' + ICO.none + '</button></div>';
+    } else {
+      h = '<div class="mgrid">' +
+        '<button data-cmd="strikeThrough"><s>Tachado</s></button>' +
+        '<button data-cmd="superscript">x<sup>2</sup> Sobrescrito</button>' +
+        '<button data-cmd="subscript">x<sub>2</sub> Subscrito</button>' +
+        '<button data-cmd="insertUnorderedList">• Lista</button>' +
+        '<button data-cmd="insertOrderedList">1. Lista numerada</button>' +
+        '<button data-cmd="big">Texto maior</button>' +
+        '<button data-cmd="clear">Limpar formatação</button>' +
+      '</div>';
+    }
+    panel.innerHTML = h; panel.hidden = false;
+  }
+  // tira uma propriedade de estilo (cor, grifo) dos trechos selecionados
+  function stripStyle(ed, prop){
+    const s = window.getSelection(); if (!s.rangeCount) return;
+    const r = s.getRangeAt(0); if (!ed.contains(r.commonAncestorContainer)) return;
+    const els = [...ed.querySelectorAll('[style], font[color]')].filter(el => r.intersectsNode(el));
+    let up = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
+    while (up && up !== ed) { if (up.style || up.tagName === 'FONT') els.push(up); up = up.parentElement; }
+    for (const el of els) {
+      if (prop === 'color' && el.tagName === 'FONT') el.removeAttribute('color');
+      el.style.removeProperty(prop); if (prop === 'background-color') el.style.removeProperty('background');
+      if (!el.getAttribute('style')) el.removeAttribute('style');
+      if ((el.tagName === 'SPAN' || el.tagName === 'FONT') && !el.attributes.length) { while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el); el.remove(); }
+    }
+  }
+  function applyHi(ed, val){
+    if (val === 'none') { stripStyle(ed, 'background-color'); return; }
+    if (!document.execCommand('hiliteColor', false, val)) document.execCommand('backColor', false, val);
+  }
+  function refreshState(){
+    for (const b of tools.querySelectorAll('.trow [data-cmd]')) {
+      if (!['bold','italic','underline'].includes(b.dataset.cmd)) continue;
+      let on = false; try { on = document.queryCommandState(b.dataset.cmd); } catch(e){}
+      b.setAttribute('aria-pressed', String(!!on)); b.classList.toggle('on', !!on);
+    }
+  }
+  document.addEventListener('selectionchange', () => { if (lastEditable && document.activeElement === lastEditable && document.body.contains(box)) refreshState(); });
+  box.addEventListener('keydown', e => {
+    if (!e.target.isContentEditable || !(e.metaKey || e.ctrlKey) || !e.shiftKey || e.key.toLowerCase() !== 'h') return;
+    e.preventDefault(); try { document.execCommand('styleWithCSS', false, true); } catch(err){} applyHi(e.target, lastHi());
+  });
   tools.addEventListener('pointerdown', e => { if (e.target.closest('button')) e.preventDefault(); });
   tools.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.panel) { drawPanel(openPanel === b.dataset.panel ? null : b.dataset.panel); return; }
+    if (b.dataset.pal != null) { setFmt('pal', Number(b.dataset.pal)); drawPanel('color'); return; }
     const ed = lastEditable;
     if (!ed) { toast('Toque primeiro no texto que quer formatar.'); return; }
     ed.focus();
     try { document.execCommand('styleWithCSS', false, true); } catch(err){}
-    if (b.dataset.color) document.execCommand('foreColor', false, b.dataset.color);
-    else if (b.dataset.cmd === 'bold') document.execCommand('bold');
-    else if (b.dataset.cmd === 'clear') document.execCommand('removeFormat');
+    if (b.dataset.color) {
+      if (b.dataset.color === 'none') stripStyle(ed, 'color');
+      else { document.execCommand('foreColor', false, b.dataset.color); setFmt('color', b.dataset.color); paintBars(); }
+      drawPanel(null);
+    }
+    else if (b.dataset.hi) { applyHi(ed, b.dataset.hi); if (b.dataset.hi !== 'none') { setFmt('hi', b.dataset.hi); paintBars(); } drawPanel(null); }
+    else if (['bold','italic','underline','strikeThrough','superscript','subscript','insertUnorderedList','insertOrderedList'].includes(b.dataset.cmd)) {
+      document.execCommand(b.dataset.cmd); refreshState(); if (openPanel === 'more') drawPanel(null);
+    }
+    else if (b.dataset.cmd === 'big') {
+      const s = window.getSelection();
+      if (!s.rangeCount || s.isCollapsed) { toast('Selecione o trecho que vai ficar maior.'); return; }
+      const tmp = document.createElement('div'); tmp.appendChild(s.getRangeAt(0).cloneContents());
+      document.execCommand('insertHTML', false, '<span style="font-size: 1.25em;">' + tmp.innerHTML + '</span>'); drawPanel(null);
+    }
+    else if (b.dataset.cmd === 'clear') { document.execCommand('removeFormat'); stripStyle(ed, 'background-color'); refreshState(); drawPanel(null); }
     else if (b.dataset.cmd === 'cloze') {
       const s = window.getSelection();
       if (!s.rangeCount || s.isCollapsed) { toast('Selecione a palavra que vai virar lacuna.'); return; }
